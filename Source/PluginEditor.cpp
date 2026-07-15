@@ -14,12 +14,12 @@ void configureKnob(juce::Slider& knob, juce::Colour colour)
 }
 }
 
-class GuitarForgeAudioProcessorEditor::PedalCard final : public juce::Component,
+class StompForgeAudioProcessorEditor::PedalCard final : public juce::Component,
                                                           public juce::DragAndDropTarget
 {
 public:
-    PedalCard(GuitarForgeAudioProcessorEditor& owner,
-              GuitarForgeAudioProcessor::PedalId pedalId,
+    PedalCard(StompForgeAudioProcessorEditor& owner,
+              StompForgeAudioProcessor::PedalId pedalId,
               juce::String pedalName, juce::Colour pedalColour,
               std::initializer_list<const char*> parameterIds,
               std::initializer_list<const char*> parameterNames,
@@ -63,7 +63,7 @@ public:
     void itemDropped(const SourceDetails& details) override
     {
         dragOver = false;
-        const auto dragged = static_cast<GuitarForgeAudioProcessor::PedalId>(
+        const auto dragged = static_cast<StompForgeAudioProcessor::PedalId>(
             details.description.toString().fromFirstOccurrenceOf(":", false, false).getIntValue());
         editor.processor.movePedal(dragged, slot);
         editor.layoutPedals();
@@ -117,8 +117,8 @@ public:
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-    GuitarForgeAudioProcessorEditor& editor;
-    GuitarForgeAudioProcessor::PedalId id;
+    StompForgeAudioProcessorEditor& editor;
+    StompForgeAudioProcessor::PedalId id;
     juce::String name;
     juce::Colour colour;
     std::vector<std::unique_ptr<juce::Slider>> knobs;
@@ -131,16 +131,16 @@ private:
     bool dragOver = false;
 };
 
-GuitarForgeAudioProcessorEditor::GuitarForgeAudioProcessorEditor(GuitarForgeAudioProcessor& p)
+StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    pedals[0] = std::make_unique<PedalCard>(*this, GuitarForgeAudioProcessor::PedalId::gate,
+    pedals[0] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::gate,
         "NOISE GATE", juce::Colour(0xff287f78), std::initializer_list<const char*>{"gate"},
         std::initializer_list<const char*>{"THRESHOLD"}, "gateBypass");
-    pedals[1] = std::make_unique<PedalCard>(*this, GuitarForgeAudioProcessor::PedalId::drive,
+    pedals[1] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::drive,
         "DRIVE", juce::Colour(0xffd76525), std::initializer_list<const char*>{"drive", "mix"},
         std::initializer_list<const char*>{"GAIN", "MIX"}, "driveBypass");
-    pedals[2] = std::make_unique<PedalCard>(*this, GuitarForgeAudioProcessor::PedalId::tone,
+    pedals[2] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::tone,
         "TONE SHAPER", juce::Colour(0xff2478a8), std::initializer_list<const char*>{"bass", "mid", "treble"},
         std::initializer_list<const char*>{"BASS", "MID", "TREBLE"}, "toneBypass");
     for (auto& pedal : pedals) addAndMakeVisible(*pedal);
@@ -158,9 +158,9 @@ GuitarForgeAudioProcessorEditor::GuitarForgeAudioProcessorEditor(GuitarForgeAudi
     setSize(980, 560);
 }
 
-GuitarForgeAudioProcessorEditor::~GuitarForgeAudioProcessorEditor() = default;
+StompForgeAudioProcessorEditor::~StompForgeAudioProcessorEditor() = default;
 
-void GuitarForgeAudioProcessorEditor::paint(juce::Graphics& g)
+void StompForgeAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(0xff111318));
     juce::ColourGradient glow(juce::Colour(0xff3b2513), getWidth() * 0.5f, 0.0f,
@@ -168,7 +168,7 @@ void GuitarForgeAudioProcessorEditor::paint(juce::Graphics& g)
     g.setGradientFill(glow); g.fillAll();
     g.setColour(juce::Colour(0xffffa62b));
     g.setFont(juce::FontOptions(29.0f, juce::Font::bold));
-    g.drawText("GUITAR FORGE", 24, 12, getWidth() - 160, 38, juce::Justification::centredLeft);
+    g.drawText("STOMPFORGE", 24, 12, getWidth() - 160, 38, juce::Justification::centredLeft);
     g.setColour(juce::Colour(0xffaeb2bb));
     g.setFont(juce::FontOptions(12.0f));
     g.drawText("PEDALBOARD  •  SIGNAL FLOWS LEFT TO RIGHT", 27, 47, getWidth() - 180, 18,
@@ -177,7 +177,7 @@ void GuitarForgeAudioProcessorEditor::paint(juce::Graphics& g)
     g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(10.0f), 10.0f, 1.5f);
 }
 
-void GuitarForgeAudioProcessorEditor::layoutPedals()
+void StompForgeAudioProcessorEditor::layoutPedals()
 {
     auto area = getLocalBounds().reduced(18).withTrimmedTop(70).withTrimmedBottom(12);
     area.removeFromRight(100);
@@ -193,7 +193,7 @@ void GuitarForgeAudioProcessorEditor::layoutPedals()
     }
 }
 
-void GuitarForgeAudioProcessorEditor::resized()
+void StompForgeAudioProcessorEditor::resized()
 {
     layoutPedals();
     auto outputArea = getLocalBounds().removeFromRight(108).withTrimmedTop(75).withTrimmedBottom(20);

@@ -1,4 +1,4 @@
-# Guitar Forge
+# StompForge
 
 Кроссплатформенный гитарный эффект VST3/Standalone на JUCE 8.
 
@@ -21,8 +21,8 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-VST3 будет в `build/GuitarForge_artefacts/Release/VST3/Guitar Forge.vst3`.
-Standalone-приложение — в `build/GuitarForge_artefacts/Release/Standalone/`.
+VST3 будет в `build/StompForge_artefacts/Release/VST3/StompForge.vst3`.
+Standalone-приложение — в `build/StompForge_artefacts/Release/Standalone/`.
 
 Скопируйте `.vst3` в `C:\Program Files\Common Files\VST3`, затем пересканируйте плагины в DAW.
 

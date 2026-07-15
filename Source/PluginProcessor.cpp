@@ -1,7 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-GuitarForgeAudioProcessor::GuitarForgeAudioProcessor()
+StompForgeAudioProcessor::StompForgeAudioProcessor()
     : AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
                                       .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
@@ -13,7 +13,7 @@ GuitarForgeAudioProcessor::GuitarForgeAudioProcessor()
     setPedalOrder({PedalId::gate, PedalId::drive, PedalId::tone}, true);
 }
 
-GuitarForgeAudioProcessor::APVTS::ParameterLayout GuitarForgeAudioProcessor::createParameterLayout()
+StompForgeAudioProcessor::APVTS::ParameterLayout StompForgeAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
     p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"gate", 1}, "Gate",
@@ -36,14 +36,14 @@ GuitarForgeAudioProcessor::APVTS::ParameterLayout GuitarForgeAudioProcessor::cre
     return {p.begin(), p.end()};
 }
 
-bool GuitarForgeAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+bool StompForgeAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
     const auto out = layouts.getMainOutputChannelSet();
     return (out == juce::AudioChannelSet::mono() || out == juce::AudioChannelSet::stereo())
         && out == layouts.getMainInputChannelSet();
 }
 
-void GuitarForgeAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void StompForgeAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(samplesPerBlock),
                                static_cast<juce::uint32>(getTotalNumOutputChannels())};
@@ -51,7 +51,7 @@ void GuitarForgeAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     outputGain.reset(sampleRate, 0.02);
 }
 
-void GuitarForgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void StompForgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
     for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
@@ -64,12 +64,12 @@ void GuitarForgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         buffer.applyGain(sample, 1, outputGain.getNextValue());
 }
 
-void GuitarForgeAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
+void StompForgeAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
 {
     if (auto xml = parameters.copyState().createXml()) copyXmlToBinary(*xml, dest);
 }
 
-void GuitarForgeAudioProcessor::setStateInformation(const void* data, int size)
+void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
 {
     if (auto xml = getXmlFromBinary(data, size); xml && xml->hasTagName(parameters.state.getType())) {
         parameters.replaceState(juce::ValueTree::fromXml(*xml));
@@ -83,20 +83,20 @@ void GuitarForgeAudioProcessor::setStateInformation(const void* data, int size)
     }
 }
 
-juce::uint32 GuitarForgeAudioProcessor::packOrder(const std::array<PedalId, 3>& order) noexcept
+juce::uint32 StompForgeAudioProcessor::packOrder(const std::array<PedalId, 3>& order) noexcept
 {
     return static_cast<juce::uint32>(order[0]) | (static_cast<juce::uint32>(order[1]) << 2u)
         | (static_cast<juce::uint32>(order[2]) << 4u);
 }
 
-std::array<GuitarForgeAudioProcessor::PedalId, 3> GuitarForgeAudioProcessor::getPedalOrder() const noexcept
+std::array<StompForgeAudioProcessor::PedalId, 3> StompForgeAudioProcessor::getPedalOrder() const noexcept
 {
     const auto value = packedOrder.load(std::memory_order_acquire);
     return {static_cast<PedalId>(value & 3u), static_cast<PedalId>((value >> 2u) & 3u),
             static_cast<PedalId>((value >> 4u) & 3u)};
 }
 
-void GuitarForgeAudioProcessor::setPedalOrder(const std::array<PedalId, 3>& order, bool saveToState)
+void StompForgeAudioProcessor::setPedalOrder(const std::array<PedalId, 3>& order, bool saveToState)
 {
     std::array<bool, 3> seen{};
     for (auto id : order) {
@@ -110,7 +110,7 @@ void GuitarForgeAudioProcessor::setPedalOrder(const std::array<PedalId, 3>& orde
             + juce::String(static_cast<int>(order[1])) + "," + juce::String(static_cast<int>(order[2])), nullptr);
 }
 
-void GuitarForgeAudioProcessor::movePedal(PedalId dragged, int targetSlot)
+void StompForgeAudioProcessor::movePedal(PedalId dragged, int targetSlot)
 {
     auto order = getPedalOrder();
     const auto from = static_cast<int>(std::find(order.begin(), order.end(), dragged) - order.begin());
@@ -125,5 +125,5 @@ void GuitarForgeAudioProcessor::movePedal(PedalId dragged, int targetSlot)
     setPedalOrder(order, true);
 }
 
-juce::AudioProcessorEditor* GuitarForgeAudioProcessor::createEditor() { return new GuitarForgeAudioProcessorEditor(*this); }
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new GuitarForgeAudioProcessor(); }
+juce::AudioProcessorEditor* StompForgeAudioProcessor::createEditor() { return new StompForgeAudioProcessorEditor(*this); }
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new StompForgeAudioProcessor(); }

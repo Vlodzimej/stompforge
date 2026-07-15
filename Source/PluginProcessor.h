@@ -4,11 +4,11 @@
 #include <juce_dsp/juce_dsp.h>
 #include "Effects.h"
 
-class GuitarForgeAudioProcessor final : public juce::AudioProcessor
+class StompForgeAudioProcessor final : public juce::AudioProcessor
 {
 public:
-    GuitarForgeAudioProcessor();
-    ~GuitarForgeAudioProcessor() override = default;
+    StompForgeAudioProcessor();
+    ~StompForgeAudioProcessor() override = default;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -44,5 +44,5 @@ private:
     juce::LinearSmoothedValue<float> outputGain;
     static juce::uint32 packOrder(const std::array<PedalId, 3>&) noexcept;
     void setPedalOrder(const std::array<PedalId, 3>&, bool saveToState);
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GuitarForgeAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StompForgeAudioProcessor)
 };
