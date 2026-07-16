@@ -15,7 +15,8 @@ public:
 private:
     class PedalCard;
     StompForgeAudioProcessor& processor;
-    std::array<std::unique_ptr<PedalCard>, 3> pedals;
+    std::array<std::unique_ptr<PedalCard>, 4> pedals;
+    juce::ComboBox slotThreeModule;
     juce::Slider outputKnob;
     juce::Label outputLabel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;

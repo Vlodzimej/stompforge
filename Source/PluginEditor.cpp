@@ -23,7 +23,7 @@ public:
               juce::String pedalName, juce::Colour pedalColour,
               std::initializer_list<const char*> parameterIds,
               std::initializer_list<const char*> parameterNames,
-              const char* bypassId)
+              const char* bypassId, const char* optionId = nullptr)
         : editor(owner), id(pedalId), name(std::move(pedalName)), colour(pedalColour)
     {
         const std::vector<const char*> ids(parameterIds);
@@ -31,7 +31,7 @@ public:
         for (size_t i = 0; i < ids.size(); ++i) {
             auto knob = std::make_unique<juce::Slider>();
             configureKnob(*knob, colour);
-            if (juce::String(ids[i]) == "mix") knob->setTextValueSuffix(" %");
+            if (juce::String(ids[i]) == "mix" || juce::String(ids[i]).startsWith("ds1")) knob->setTextValueSuffix(" %");
             else knob->setTextValueSuffix(" dB");
             addAndMakeVisible(*knob);
             attachments.push_back(std::make_unique<SliderAttachment>(editor.processor.parameters, ids[i], *knob));
@@ -51,6 +51,12 @@ public:
         bypass.setColour(juce::TextButton::buttonColourId, colour.darker(0.25f));
         addAndMakeVisible(bypass);
         bypassAttachment = std::make_unique<ButtonAttachment>(editor.processor.parameters, bypassId, bypass);
+        if (optionId != nullptr) {
+            option.setButtonText("CAB SIM"); option.setClickingTogglesState(true);
+            option.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffc08b32));
+            addAndMakeVisible(option);
+            optionAttachment = std::make_unique<ButtonAttachment>(editor.processor.parameters, optionId, option);
+        }
     }
 
     bool isInterestedInDragSource(const SourceDetails& details) override
@@ -105,13 +111,18 @@ public:
     void resized() override
     {
         auto controls = getLocalBounds().reduced(10).withTrimmedTop(48).withTrimmedBottom(76);
-        const auto cellWidth = controls.getWidth() / static_cast<int>(knobs.size());
+        const auto rows = knobs.size() > 3 ? 2 : 1;
+        const auto perRow = static_cast<int>((knobs.size() + rows - 1) / rows);
+        const auto cellWidth = controls.getWidth() / perRow;
         for (size_t i = 0; i < knobs.size(); ++i) {
-            auto cell = controls.removeFromLeft(cellWidth);
+            auto row = controls.withHeight(controls.getHeight() / rows).translated(0, static_cast<int>(i / perRow) * controls.getHeight() / rows);
+            auto cell = row.withWidth(cellWidth).translated(static_cast<int>(i % perRow) * cellWidth, 0);
             labels[i]->setBounds(cell.removeFromTop(20));
             knobs[i]->setBounds(cell.reduced(1));
         }
-        bypass.setBounds(getWidth() / 2 - 37, getHeight() - 62, 74, 38);
+        const auto hasOption = optionAttachment != nullptr;
+        bypass.setBounds(hasOption ? getWidth() / 2 - 78 : getWidth() / 2 - 37, getHeight() - 62, 74, 38);
+        if (hasOption) option.setBounds(getWidth() / 2 + 4, getHeight() - 62, 82, 38);
     }
 
 private:
@@ -126,6 +137,8 @@ private:
     std::vector<std::unique_ptr<SliderAttachment>> attachments;
     juce::TextButton bypass;
     std::unique_ptr<ButtonAttachment> bypassAttachment;
+    juce::TextButton option;
+    std::unique_ptr<ButtonAttachment> optionAttachment;
     int slot = 0;
     bool canDrag = false;
     bool dragOver = false;
@@ -137,12 +150,18 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
     pedals[0] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::gate,
         "NOISE GATE", juce::Colour(0xff287f78), std::initializer_list<const char*>{"gate"},
         std::initializer_list<const char*>{"THRESHOLD"}, "gateBypass");
-    pedals[1] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::drive,
-        "DRIVE", juce::Colour(0xffd76525), std::initializer_list<const char*>{"drive", "mix"},
-        std::initializer_list<const char*>{"GAIN", "MIX"}, "driveBypass");
+    pedals[1] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::ds1,
+        "DIST-1", juce::Colour(0xffef681f),
+        std::initializer_list<const char*>{"ds1Tone", "ds1Level", "ds1Dist"},
+        std::initializer_list<const char*>{"TONE", "LEVEL", "DIST"}, "ds1Bypass");
     pedals[2] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::tone,
         "TONE SHAPER", juce::Colour(0xff2478a8), std::initializer_list<const char*>{"bass", "mid", "treble"},
         std::initializer_list<const char*>{"BASS", "MID", "TREBLE"}, "toneBypass");
+    pedals[3] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::jcm800,
+        "MARS-8", juce::Colour(0xff5b431d),
+        std::initializer_list<const char*>{"jcmPreamp", "jcmBass", "jcmMiddle", "jcmTreble", "jcmMaster", "jcmPresence", "jcmSag"},
+        std::initializer_list<const char*>{"PREAMP", "BASS", "MIDDLE", "TREBLE", "MASTER", "PRESENCE", "SAG"},
+        "jcmBypass", "jcmCab");
     for (auto& pedal : pedals) addAndMakeVisible(*pedal);
 
     configureKnob(outputKnob, juce::Colour(0xffffa62b));
@@ -153,6 +172,15 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
     outputLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(outputLabel);
     outputAttachment = std::make_unique<SliderAttachment>(processor.parameters, "output", outputKnob);
+    slotThreeModule.addItem("MARS-8", 1); slotThreeModule.addItem("TONE SHAPER", 2);
+    slotThreeModule.setSelectedId(processor.getPedalOrder()[2] == StompForgeAudioProcessor::PedalId::jcm800 ? 1 : 2,
+                                  juce::dontSendNotification);
+    slotThreeModule.onChange = [this] {
+        processor.replacePedal(2, slotThreeModule.getSelectedId() == 1
+            ? StompForgeAudioProcessor::PedalId::jcm800 : StompForgeAudioProcessor::PedalId::tone);
+        layoutPedals();
+    };
+    addAndMakeVisible(slotThreeModule);
     setResizable(true, true);
     setResizeLimits(760, 430, 1280, 720);
     setSize(980, 560);
@@ -182,11 +210,13 @@ void StompForgeAudioProcessorEditor::layoutPedals()
     auto area = getLocalBounds().reduced(18).withTrimmedTop(70).withTrimmedBottom(12);
     area.removeFromRight(100);
     const auto order = processor.getPedalOrder();
+    for (auto& pedal : pedals) pedal->setVisible(false);
     const int gap = 10;
     const int width = (area.getWidth() - gap * 2) / 3;
     for (int slot = 0; slot < 3; ++slot) {
         auto& pedal = pedals[static_cast<size_t>(order[static_cast<size_t>(slot)])];
         pedal->setSlot(slot);
+        pedal->setVisible(true);
         pedal->setBounds(area.removeFromLeft(width));
         pedal->toFront(false);
         if (slot < 2) area.removeFromLeft(gap);
@@ -197,6 +227,7 @@ void StompForgeAudioProcessorEditor::resized()
 {
     layoutPedals();
     auto outputArea = getLocalBounds().removeFromRight(108).withTrimmedTop(75).withTrimmedBottom(20);
+    slotThreeModule.setBounds(outputArea.removeFromBottom(34));
     outputLabel.setBounds(outputArea.removeFromTop(25));
     outputKnob.setBounds(outputArea.reduced(4));
 }

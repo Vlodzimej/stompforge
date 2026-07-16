@@ -1,30 +1,48 @@
 # StompForge
 
-Кроссплатформенный гитарный эффект VST3/Standalone на JUCE 8.
+Кроссплатформенный гитарный эффект VST3/Standalone на JUCE 8. Виртуальный
+педалборд поддерживает до трёх модулей и изменение их порядка перетаскиванием.
 
 ## Эффекты
 
-- Noise gate: порог от -80 до -20 dB
-- Drive: мягкое аналогоподобное насыщение `tanh`
-- Mix: параллельное смешивание clean/drive
-- Bass / Mid / Treble: трёхполосный активный EQ
-- Output: итоговая компенсация уровня
-- Автоматизация всех параметров и сохранение состояния в проекте DAW
-- Mono и stereo
+- Noise Gate с порогом от -80 до -20 dB.
+- DIST-1: circuit-inspired модель транзисторного предусилителя, кремниевого
+  диодного ограничения и пассивной Tone-секции с 4-кратным oversampling.
+- MARS-8: модель лампового преампа, tone stack, фазоинвертора, двухтактного
+  оконечного усилителя, выходного трансформатора и динамического проседания питания.
+- Переключаемый cabsim с усреднённой АЧХ кабинета 4x12 включён по умолчанию.
+- Tone Shaper: трёхполосный активный EQ.
+- Общий выходной уровень, автоматизация параметров и сохранение состояния DAW.
+- Mono и stereo.
+
+DIST-1 и MARS-8 предназначены для обработки в реальном времени. Это
+circuit-inspired DSP-модели, а не покомпонентные SPICE-симуляции. Для дальнейшей
+калибровки требуются измеренные АЧХ, спектры и re-amp записи эталонных устройств.
 
 ## Сборка на Windows
 
-Понадобятся Git, CMake 3.22+ и Visual Studio 2022 с компонентом **Desktop development with C++**.
+Понадобятся Git, CMake 3.22+ и Visual Studio 2022 с компонентом
+**Desktop development with C++**.
 
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-VST3 будет в `build/StompForge_artefacts/Release/VST3/StompForge.vst3`.
-Standalone-приложение — в `build/StompForge_artefacts/Release/Standalone/`.
+Для ASIO в Standalone укажите корень установленного ASIO SDK:
 
-Скопируйте `.vst3` в `C:\Program Files\Common Files\VST3`, затем пересканируйте плагины в DAW.
+```powershell
+cmake -S . -B build -DASIO_SDK_PATH="C:\SDKs\asiosdk"
+cmake --build build --config Release
+```
+
+В корне SDK должен находиться `common/iasiodrv.h`. Для VST3 аудиодрайвер и
+размер блока задаются самой DAW.
+
+Артефакты:
+
+- `build/StompForge_artefacts/Release/VST3/StompForge.vst3`
+- `build/StompForge_artefacts/Release/Standalone/StompForge.exe`
 
 ## Сборка на macOS
 
@@ -33,4 +51,4 @@ cmake -S . -B build -G Xcode
 cmake --build build --config Release
 ```
 
-> JUCE распространяется по собственной лицензии. Перед коммерческим релизом выберите подходящий план JUCE и замените тестовые идентификаторы производителя/плагина в `CMakeLists.txt`.
+Перед коммерческим релизом необходимо выбрать подходящий план лицензирования JUCE.

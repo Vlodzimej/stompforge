@@ -34,12 +34,13 @@ public:
     APVTS parameters;
     static APVTS::ParameterLayout createParameterLayout();
 
-    enum class PedalId : int { gate = 0, drive, tone };
+    enum class PedalId : int { gate = 0, ds1, tone, jcm800 };
     std::array<PedalId, 3> getPedalOrder() const noexcept;
     void movePedal(PedalId dragged, int targetSlot);
+    void replacePedal(int slot, PedalId replacement);
 
 private:
-    std::array<std::unique_ptr<EffectModule>, 3> effects;
+    std::array<std::unique_ptr<EffectModule>, 4> effects;
     std::atomic<juce::uint32> packedOrder { 0x24u };
     juce::LinearSmoothedValue<float> outputGain;
     static juce::uint32 packOrder(const std::array<PedalId, 3>&) noexcept;

@@ -7,10 +7,17 @@ StompForgeAudioProcessor::StompForgeAudioProcessor()
       parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
     effects[0] = std::make_unique<GateEffect>(*parameters.getRawParameterValue("gate"), *parameters.getRawParameterValue("gateBypass"));
-    effects[1] = std::make_unique<DriveEffect>(*parameters.getRawParameterValue("drive"), *parameters.getRawParameterValue("mix"), *parameters.getRawParameterValue("driveBypass"));
+    effects[1] = std::make_unique<Dist1Effect>(*parameters.getRawParameterValue("ds1Dist"),
+        *parameters.getRawParameterValue("ds1Tone"), *parameters.getRawParameterValue("ds1Level"),
+        *parameters.getRawParameterValue("ds1Bypass"));
     effects[2] = std::make_unique<ToneEffect>(*parameters.getRawParameterValue("bass"), *parameters.getRawParameterValue("mid"),
                                             *parameters.getRawParameterValue("treble"), *parameters.getRawParameterValue("toneBypass"));
-    setPedalOrder({PedalId::gate, PedalId::drive, PedalId::tone}, true);
+    effects[3] = std::make_unique<Mars8Effect>(*parameters.getRawParameterValue("jcmPreamp"),
+        *parameters.getRawParameterValue("jcmBass"), *parameters.getRawParameterValue("jcmMiddle"),
+        *parameters.getRawParameterValue("jcmTreble"), *parameters.getRawParameterValue("jcmMaster"),
+        *parameters.getRawParameterValue("jcmPresence"), *parameters.getRawParameterValue("jcmSag"),
+        *parameters.getRawParameterValue("jcmCab"), *parameters.getRawParameterValue("jcmBypass"));
+    setPedalOrder({PedalId::gate, PedalId::ds1, PedalId::jcm800}, true);
 }
 
 StompForgeAudioProcessor::APVTS::ParameterLayout StompForgeAudioProcessor::createParameterLayout()
@@ -33,6 +40,22 @@ StompForgeAudioProcessor::APVTS::ParameterLayout StompForgeAudioProcessor::creat
     p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"gateBypass", 1}, "Gate Bypass", false));
     p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"driveBypass", 1}, "Drive Bypass", false));
     p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"toneBypass", 1}, "Tone Bypass", false));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"ds1Dist", 1}, "DIST-1 Distortion",
+        juce::NormalisableRange<float>{0.0f, 100.0f, 0.1f}, 55.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"ds1Tone", 1}, "DIST-1 Tone",
+        juce::NormalisableRange<float>{0.0f, 100.0f, 0.1f}, 50.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"ds1Level", 1}, "DIST-1 Level",
+        juce::NormalisableRange<float>{0.0f, 100.0f, 0.1f}, 65.0f));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"ds1Bypass", 1}, "DIST-1 Bypass", false));
+    auto addJcm = [&p] (const char* id, const char* name, float initial) {
+        p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{id, 1}, name,
+            juce::NormalisableRange<float>{0.0f, 100.0f, 0.1f}, initial)); };
+    addJcm("jcmPreamp", "MARS-8 Preamp", 65.0f); addJcm("jcmBass", "MARS-8 Bass", 55.0f);
+    addJcm("jcmMiddle", "MARS-8 Middle", 65.0f); addJcm("jcmTreble", "MARS-8 Treble", 55.0f);
+    addJcm("jcmMaster", "MARS-8 Master", 55.0f); addJcm("jcmPresence", "MARS-8 Presence", 50.0f);
+    addJcm("jcmSag", "MARS-8 Power Sag", 45.0f);
+    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"jcmCab", 1}, "MARS-8 Cab", true));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"jcmBypass", 1}, "MARS-8 Bypass", false));
     return {p.begin(), p.end()};
 }
 
@@ -72,7 +95,20 @@ void StompForgeAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
 void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
 {
     if (auto xml = getXmlFromBinary(data, size); xml && xml->hasTagName(parameters.state.getType())) {
+        const auto savedXml = xml->toString();
         parameters.replaceState(juce::ValueTree::fromXml(*xml));
+        // Old sessions predate the DIST-1/MARS-8 parameters. Some hosts restore
+        // missing APVTS children as zero, which makes Level or Master mute the
+        // module. Restore only genuinely absent parameters to their declared
+        // defaults; explicit user zero values remain untouched.
+        constexpr std::array<const char*, 13> addedParameters {
+            "ds1Dist", "ds1Tone", "ds1Level", "ds1Bypass",
+            "jcmPreamp", "jcmBass", "jcmMiddle", "jcmTreble", "jcmMaster",
+            "jcmPresence", "jcmSag", "jcmCab", "jcmBypass" };
+        for (const auto* id : addedParameters)
+            if (!savedXml.contains("id=\"" + juce::String(id) + "\""))
+                if (auto* parameter = parameters.getParameter(id))
+                    parameter->setValueNotifyingHost(parameter->getDefaultValue());
         const auto text = parameters.state.getProperty("pedalOrder", "0,1,2").toString();
         juce::StringArray values; values.addTokens(text, ",", "");
         if (values.size() == 3) {
@@ -98,7 +134,7 @@ std::array<StompForgeAudioProcessor::PedalId, 3> StompForgeAudioProcessor::getPe
 
 void StompForgeAudioProcessor::setPedalOrder(const std::array<PedalId, 3>& order, bool saveToState)
 {
-    std::array<bool, 3> seen{};
+    std::array<bool, 4> seen{};
     for (auto id : order) {
         const auto index = static_cast<size_t>(id);
         if (index >= seen.size() || seen[index]) return;
@@ -122,6 +158,15 @@ void StompForgeAudioProcessor::movePedal(PedalId dragged, int targetSlot)
     else
         std::move_backward(order.begin() + targetSlot, order.begin() + from, order.begin() + from + 1);
     order[static_cast<size_t>(targetSlot)] = item;
+    setPedalOrder(order, true);
+}
+
+void StompForgeAudioProcessor::replacePedal(int slot, PedalId replacement)
+{
+    auto order = getPedalOrder(); slot = juce::jlimit(0, 2, slot);
+    const auto existing = std::find(order.begin(), order.end(), replacement);
+    if (existing != order.end()) std::swap(order[static_cast<size_t>(slot)], *existing);
+    else order[static_cast<size_t>(slot)] = replacement;
     setPedalOrder(order, true);
 }
 
