@@ -15,7 +15,8 @@ void configureKnob(juce::Slider& knob, juce::Colour colour)
 }
 
 class StompForgeAudioProcessorEditor::PedalCard final : public juce::Component,
-                                                          public juce::DragAndDropTarget
+                                                          public juce::DragAndDropTarget,
+                                                          private juce::Timer
 {
 public:
     PedalCard(StompForgeAudioProcessorEditor& owner,
@@ -31,9 +32,14 @@ public:
         for (size_t i = 0; i < ids.size(); ++i) {
             auto knob = std::make_unique<juce::Slider>();
             configureKnob(*knob, colour);
-            if (juce::String(ids[i]) == "mix" || juce::String(ids[i]).startsWith("ds1")) knob->setTextValueSuffix(" %");
+            const juce::String parameterId(ids[i]);
+            if (parameterId == "mix" || parameterId.startsWith("ds1")
+                || parameterId.startsWith("chorus") || parameterId.startsWith("reverb")
+                || parameterId.startsWith("delay") || parameterId.startsWith("jcm"))
+                knob->setTextValueSuffix(" %");
             else knob->setTextValueSuffix(" dB");
             addAndMakeVisible(*knob);
+            knob->addMouseListener(this, false);
             attachments.push_back(std::make_unique<SliderAttachment>(editor.processor.parameters, ids[i], *knob));
             knobs.push_back(std::move(knob));
 
@@ -42,6 +48,7 @@ public:
             label->setJustificationType(juce::Justification::centred);
             label->setColour(juce::Label::textColourId, juce::Colour(0xfff8efd8));
             addAndMakeVisible(*label);
+            label->addMouseListener(this, false);
             labels.push_back(std::move(label));
         }
 
@@ -50,18 +57,20 @@ public:
         bypass.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff202329));
         bypass.setColour(juce::TextButton::buttonColourId, colour.darker(0.25f));
         addAndMakeVisible(bypass);
+        bypass.addMouseListener(this, false);
         bypassAttachment = std::make_unique<ButtonAttachment>(editor.processor.parameters, bypassId, bypass);
         if (optionId != nullptr) {
             option.setButtonText("CAB SIM"); option.setClickingTogglesState(true);
             option.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffc08b32));
             addAndMakeVisible(option);
+            option.addMouseListener(this, false);
             optionAttachment = std::make_unique<ButtonAttachment>(editor.processor.parameters, optionId, option);
         }
     }
 
     bool isInterestedInDragSource(const SourceDetails& details) override
     {
-        return details.description.toString().startsWith("pedal:");
+        return details.description.toString().startsWith("slot:");
     }
 
     void itemDragEnter(const SourceDetails&) override { dragOver = true; repaint(); }
@@ -69,23 +78,32 @@ public:
     void itemDropped(const SourceDetails& details) override
     {
         dragOver = false;
-        const auto dragged = static_cast<StompForgeAudioProcessor::PedalId>(
-            details.description.toString().fromFirstOccurrenceOf(":", false, false).getIntValue());
-        editor.processor.movePedal(dragged, slot);
+        const auto sourceSlot = details.description.toString()
+            .fromFirstOccurrenceOf(":", false, false).getIntValue();
+        editor.processor.movePedal(sourceSlot, slot);
         editor.layoutPedals();
         repaint();
     }
 
     void mouseDown(const juce::MouseEvent& event) override
     {
-        canDrag = event.y < 48;
+        canDrag = event.getEventRelativeTo(this).y < 48;
+        dragStarted = false;
+        startTimer(650);
     }
 
-    void mouseDrag(const juce::MouseEvent&) override
+    void mouseDrag(const juce::MouseEvent& event) override
     {
-        if (canDrag && !editor.isDragAndDropActive())
-            editor.startDragging("pedal:" + juce::String(static_cast<int>(id)), this);
+        if (event.getDistanceFromDragStart() > 7) {
+            stopTimer();
+            if (canDrag && !editor.isDragAndDropActive()) {
+                dragStarted = true;
+                editor.startDragging("slot:" + juce::String(slot), this);
+            }
+        }
     }
+
+    void mouseUp(const juce::MouseEvent&) override { stopTimer(); }
 
     void setSlot(int newSlot) { slot = newSlot; }
 
@@ -102,7 +120,8 @@ public:
         g.setFont(juce::FontOptions(20.0f, juce::Font::bold));
         g.drawText(name, 12, 8, getWidth() - 24, 28, juce::Justification::centred);
         g.setFont(juce::FontOptions(11.0f));
-        g.drawText("≡  DRAG TO REORDER", 12, 34, getWidth() - 24, 16, juce::Justification::centred);
+        g.drawText("DRAG TO REORDER  |  HOLD TO REPLACE", 12, 34, getWidth() - 24, 16,
+                   juce::Justification::centred);
         g.setColour(juce::Colour(0xaa17191e));
         g.fillRoundedRectangle(14.0f, static_cast<float>(getHeight() - 72),
                                static_cast<float>(getWidth() - 28), 56.0f, 7.0f);
@@ -126,6 +145,12 @@ public:
     }
 
 private:
+    void timerCallback() override
+    {
+        stopTimer();
+        if (!dragStarted) editor.showEffectMenu(slot);
+    }
+
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     StompForgeAudioProcessorEditor& editor;
@@ -141,6 +166,7 @@ private:
     std::unique_ptr<ButtonAttachment> optionAttachment;
     int slot = 0;
     bool canDrag = false;
+    bool dragStarted = false;
     bool dragOver = false;
 };
 
@@ -151,7 +177,7 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
         "NOISE GATE", juce::Colour(0xff287f78), std::initializer_list<const char*>{"gate"},
         std::initializer_list<const char*>{"THRESHOLD"}, "gateBypass");
     pedals[1] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::ds1,
-        "DIST-1", juce::Colour(0xffef681f),
+        "DEIMOS-1", juce::Colour(0xffef681f),
         std::initializer_list<const char*>{"ds1Tone", "ds1Level", "ds1Dist"},
         std::initializer_list<const char*>{"TONE", "LEVEL", "DIST"}, "ds1Bypass");
     pedals[2] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::tone,
@@ -162,6 +188,18 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
         std::initializer_list<const char*>{"jcmPreamp", "jcmBass", "jcmMiddle", "jcmTreble", "jcmMaster", "jcmPresence", "jcmSag"},
         std::initializer_list<const char*>{"PREAMP", "BASS", "MIDDLE", "TREBLE", "MASTER", "PRESENCE", "SAG"},
         "jcmBypass", "jcmCab");
+    pedals[4] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::chorus,
+        "CERES-2", juce::Colour(0xff3f83a6),
+        std::initializer_list<const char*>{"chorusRate", "chorusDepth", "chorusMix"},
+        std::initializer_list<const char*>{"RATE", "DEPTH", "MIX"}, "chorusBypass");
+    pedals[5] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::reverb,
+        "ROOM REVERB", juce::Colour(0xff327a91),
+        std::initializer_list<const char*>{"reverbSize", "reverbDamping", "reverbMix"},
+        std::initializer_list<const char*>{"SIZE", "DAMP", "MIX"}, "reverbBypass");
+    pedals[6] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::delay,
+        "DIGITAL DELAY", juce::Colour(0xff3f659b),
+        std::initializer_list<const char*>{"delayTime", "delayFeedback", "delayMix"},
+        std::initializer_list<const char*>{"TIME", "FEEDBACK", "MIX"}, "delayBypass");
     for (auto& pedal : pedals) addAndMakeVisible(*pedal);
 
     configureKnob(outputKnob, juce::Colour(0xffffa62b));
@@ -172,21 +210,34 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
     outputLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(outputLabel);
     outputAttachment = std::make_unique<SliderAttachment>(processor.parameters, "output", outputKnob);
-    slotThreeModule.addItem("MARS-8", 1); slotThreeModule.addItem("TONE SHAPER", 2);
-    slotThreeModule.setSelectedId(processor.getPedalOrder()[2] == StompForgeAudioProcessor::PedalId::jcm800 ? 1 : 2,
-                                  juce::dontSendNotification);
-    slotThreeModule.onChange = [this] {
-        processor.replacePedal(2, slotThreeModule.getSelectedId() == 1
-            ? StompForgeAudioProcessor::PedalId::jcm800 : StompForgeAudioProcessor::PedalId::tone);
-        layoutPedals();
-    };
-    addAndMakeVisible(slotThreeModule);
     setResizable(true, true);
-    setResizeLimits(760, 430, 1280, 720);
-    setSize(980, 560);
+    setResizeLimits(800, 620, 1440, 960);
+    setSize(1100, 760);
 }
 
 StompForgeAudioProcessorEditor::~StompForgeAudioProcessorEditor() = default;
+
+void StompForgeAudioProcessorEditor::showEffectMenu(int slot)
+{
+    using Id = StompForgeAudioProcessor::PedalId;
+    auto item = [] (Id id, const juce::String& name) {
+        juce::PopupMenu menu; menu.addItem(static_cast<int>(id) + 1, name); return menu;
+    };
+    juce::PopupMenu menu;
+    menu.addSubMenu("Dynamic", item(Id::gate, "Noise Gate"));
+    menu.addSubMenu("Distortion", item(Id::ds1, "DEIMOS-1"));
+    menu.addSubMenu("Modulation", item(Id::chorus, "CERES-2"));
+    menu.addSubMenu("Amp", item(Id::jcm800, "MARS-8"));
+    menu.addSubMenu("Reverb", item(Id::reverb, "Room Reverb"));
+    menu.addSubMenu("Delay", item(Id::delay, "Digital Delay"));
+    auto safeThis = juce::Component::SafePointer<StompForgeAudioProcessorEditor>(this);
+    menu.showMenuAsync(juce::PopupMenu::Options(), [safeThis, slot] (int result) {
+        if (safeThis != nullptr && result > 0) {
+            safeThis->processor.replacePedal(slot, static_cast<Id>(result - 1));
+            safeThis->layoutPedals();
+        }
+    });
+}
 
 void StompForgeAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -212,14 +263,17 @@ void StompForgeAudioProcessorEditor::layoutPedals()
     const auto order = processor.getPedalOrder();
     for (auto& pedal : pedals) pedal->setVisible(false);
     const int gap = 10;
+    const int rowGap = 10;
     const int width = (area.getWidth() - gap * 2) / 3;
-    for (int slot = 0; slot < 3; ++slot) {
+    const int height = (area.getHeight() - rowGap) / 2;
+    for (int slot = 0; slot < static_cast<int>(StompForgeAudioProcessor::numSlots); ++slot) {
         auto& pedal = pedals[static_cast<size_t>(order[static_cast<size_t>(slot)])];
         pedal->setSlot(slot);
         pedal->setVisible(true);
-        pedal->setBounds(area.removeFromLeft(width));
+        const auto column = slot % 3; const auto row = slot / 3;
+        pedal->setBounds(area.getX() + column * (width + gap),
+                         area.getY() + row * (height + rowGap), width, height);
         pedal->toFront(false);
-        if (slot < 2) area.removeFromLeft(gap);
     }
 }
 
@@ -227,7 +281,6 @@ void StompForgeAudioProcessorEditor::resized()
 {
     layoutPedals();
     auto outputArea = getLocalBounds().removeFromRight(108).withTrimmedTop(75).withTrimmedBottom(20);
-    slotThreeModule.setBounds(outputArea.removeFromBottom(34));
     outputLabel.setBounds(outputArea.removeFromTop(25));
     outputKnob.setBounds(outputArea.reduced(4));
 }

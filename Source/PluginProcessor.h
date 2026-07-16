@@ -34,16 +34,18 @@ public:
     APVTS parameters;
     static APVTS::ParameterLayout createParameterLayout();
 
-    enum class PedalId : int { gate = 0, ds1, tone, jcm800 };
-    std::array<PedalId, 3> getPedalOrder() const noexcept;
-    void movePedal(PedalId dragged, int targetSlot);
+    enum class PedalId : int { gate = 0, ds1, tone, jcm800, chorus, reverb, delay };
+    static constexpr size_t numSlots = 6;
+    static constexpr size_t numEffects = 7;
+    std::array<PedalId, numSlots> getPedalOrder() const noexcept;
+    void movePedal(int sourceSlot, int targetSlot);
     void replacePedal(int slot, PedalId replacement);
 
 private:
-    std::array<std::unique_ptr<EffectModule>, 4> effects;
-    std::atomic<juce::uint32> packedOrder { 0x24u };
+    std::array<std::unique_ptr<EffectModule>, numEffects> effects;
+    std::atomic<juce::uint32> packedOrder { 0u };
     juce::LinearSmoothedValue<float> outputGain;
-    static juce::uint32 packOrder(const std::array<PedalId, 3>&) noexcept;
-    void setPedalOrder(const std::array<PedalId, 3>&, bool saveToState);
+    static juce::uint32 packOrder(const std::array<PedalId, numSlots>&) noexcept;
+    void setPedalOrder(const std::array<PedalId, numSlots>&, bool saveToState);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StompForgeAudioProcessor)
 };

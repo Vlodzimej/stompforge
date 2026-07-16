@@ -40,13 +40,13 @@ private:
     std::atomic<float>& bypass;
 };
 
-// Real-time, circuit-inspired model of the DIST-1 signal path. The
+// Real-time, circuit-inspired model of the DEIMOS-1 signal path. The
 // analogue stages are represented separately so they can be refined or
 // replaced by measured/WDF models without changing the pedalboard API.
-class Dist1Effect final : public EffectModule
+class Deimos1Effect final : public EffectModule
 {
 public:
-    Dist1Effect(std::atomic<float>& distortion, std::atomic<float>& tone,
+    Deimos1Effect(std::atomic<float>& distortion, std::atomic<float>& tone,
                         std::atomic<float>& level, std::atomic<float>& bypass);
     void prepare(const juce::dsp::ProcessSpec&) override;
     void reset() override;
@@ -120,4 +120,55 @@ private:
     float cachedBass = -1.0f, cachedMiddle = -1.0f, cachedTreble = -1.0f, cachedPresence = -1.0f;
     void updateFilters();
     static float triode(float x, float bias, float hardness) noexcept;
+};
+
+class Ceres2Effect final : public EffectModule
+{
+public:
+    Ceres2Effect(std::atomic<float>& rate, std::atomic<float>& depth,
+                 std::atomic<float>& mix, std::atomic<float>& bypass);
+    void prepare(const juce::dsp::ProcessSpec&) override;
+    void reset() override;
+    void process(juce::AudioBuffer<float>&) override;
+private:
+    std::atomic<float>& rateParam; std::atomic<float>& depthParam;
+    std::atomic<float>& mixParam; std::atomic<float>& bypassParam;
+    using Filter = juce::dsp::IIR::Filter<float>;
+    using Coefficients = juce::dsp::IIR::Coefficients<float>;
+    std::array<Filter, 2> inputHighPass, antiAlias1, antiAlias2, antiAlias3,
+                          reconstruction1, reconstruction2, reconstruction3;
+    std::array<std::vector<float>, 2> bbdBuffer;
+    std::array<size_t, 2> writePosition {};
+    double sampleRate = 44100.0;
+    float lfoPhase = 0.0f;
+};
+
+class ReverbEffect final : public EffectModule
+{
+public:
+    ReverbEffect(std::atomic<float>& size, std::atomic<float>& damping,
+                 std::atomic<float>& mix, std::atomic<float>& bypass);
+    void prepare(const juce::dsp::ProcessSpec&) override;
+    void reset() override;
+    void process(juce::AudioBuffer<float>&) override;
+private:
+    std::atomic<float>& sizeParam; std::atomic<float>& dampingParam;
+    std::atomic<float>& mixParam; std::atomic<float>& bypassParam;
+    juce::dsp::Reverb reverb;
+};
+
+class DelayEffect final : public EffectModule
+{
+public:
+    DelayEffect(std::atomic<float>& time, std::atomic<float>& feedback,
+                std::atomic<float>& mix, std::atomic<float>& bypass);
+    void prepare(const juce::dsp::ProcessSpec&) override;
+    void reset() override;
+    void process(juce::AudioBuffer<float>&) override;
+private:
+    std::atomic<float>& timeParam; std::atomic<float>& feedbackParam;
+    std::atomic<float>& mixParam; std::atomic<float>& bypassParam;
+    std::array<std::vector<float>, 2> delayBuffer;
+    std::array<size_t, 2> writePosition {};
+    double sampleRate = 44100.0;
 };

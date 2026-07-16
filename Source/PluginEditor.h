@@ -15,13 +15,13 @@ public:
 private:
     class PedalCard;
     StompForgeAudioProcessor& processor;
-    std::array<std::unique_ptr<PedalCard>, 4> pedals;
-    juce::ComboBox slotThreeModule;
+    std::array<std::unique_ptr<PedalCard>, StompForgeAudioProcessor::numEffects> pedals;
     juce::Slider outputKnob;
     juce::Label outputLabel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<SliderAttachment> outputAttachment;
 
     void layoutPedals();
+    void showEffectMenu(int slot);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StompForgeAudioProcessorEditor)
 };

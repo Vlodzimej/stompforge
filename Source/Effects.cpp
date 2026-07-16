@@ -42,11 +42,11 @@ void DriveEffect::process(juce::AudioBuffer<float>& buffer)
         }
 }
 
-Dist1Effect::Dist1Effect(std::atomic<float>& d, std::atomic<float>& t,
+Deimos1Effect::Deimos1Effect(std::atomic<float>& d, std::atomic<float>& t,
                                          std::atomic<float>& l, std::atomic<float>& b)
     : distortion(d), tone(t), level(l), bypass(b) {}
 
-void Dist1Effect::prepare(const juce::dsp::ProcessSpec& spec)
+void Deimos1Effect::prepare(const juce::dsp::ProcessSpec& spec)
 {
     oversampling = std::make_unique<juce::dsp::Oversampling<float>>(
         spec.numChannels, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, false);
@@ -61,7 +61,7 @@ void Dist1Effect::prepare(const juce::dsp::ProcessSpec& spec)
     reset();
 }
 
-void Dist1Effect::reset()
+void Deimos1Effect::reset()
 {
     if (oversampling != nullptr) oversampling->reset();
     for (auto* bank : {&inputHighPass, &transistorLowPass, &opAmpHighPass, &clippingLowPass,
@@ -69,9 +69,9 @@ void Dist1Effect::reset()
         for (auto& filter : *bank) filter.reset();
 }
 
-void Dist1Effect::updateFilters()
+void Deimos1Effect::updateFilters()
 {
-    // First-edition DIST-1 values: C1/R2 input coupling, Q2's 470k/250p
+    // First-edition DEIMOS-1 values: C1/R2 input coupling, Q2's 470k/250p
     // collector roll-off, 4.7k/0.1u Dist feedback, 2.2k/10n clipping
     // node, and the two passive Tone branches (6.8k/0.1u and 6.8k/22n).
     // Each of these networks is a single R/C pole in the analogue circuit.
@@ -95,7 +95,7 @@ void Dist1Effect::updateFilters()
     }
 }
 
-float Dist1Effect::siliconDiodePair(float sample) noexcept
+float Deimos1Effect::siliconDiodePair(float sample) noexcept
 {
     // Antiparallel silicon diodes: firm knee around 0.62 V with a narrow
     // exponential-like transition rather than an ideal digital clipper.
@@ -108,7 +108,7 @@ float Dist1Effect::siliconDiodePair(float sample) noexcept
     return std::copysign(limited, sample);
 }
 
-void Dist1Effect::process(juce::AudioBuffer<float>& buffer)
+void Deimos1Effect::process(juce::AudioBuffer<float>& buffer)
 {
     if (bypass.load() >= 0.5f || oversampling == nullptr) return;
 
@@ -311,4 +311,147 @@ void Mars8Effect::process(juce::AudioBuffer<float>& buffer)
         }
     }
     oversampling->processSamplesDown(base);
+}
+
+Ceres2Effect::Ceres2Effect(std::atomic<float>& rate, std::atomic<float>& depth,
+                            std::atomic<float>& mix, std::atomic<float>& bypass)
+    : rateParam(rate), depthParam(depth), mixParam(mix), bypassParam(bypass) {}
+
+void Ceres2Effect::prepare(const juce::dsp::ProcessSpec& spec)
+{
+    sampleRate = spec.sampleRate;
+    auto monoSpec = spec; monoSpec.numChannels = 1;
+    for (auto* bank : {&inputHighPass, &antiAlias1, &antiAlias2, &antiAlias3,
+                       &reconstruction1, &reconstruction2, &reconstruction3})
+        for (auto& filter : *bank) filter.prepare(monoSpec);
+    auto set = [] (auto& bank, const auto& coefficients) {
+        for (auto& filter : bank) *filter.coefficients = *coefficients;
+    };
+    set(inputHighPass, Coefficients::makeFirstOrderHighPass(sampleRate, 22.0));
+    // The three 10k/capacitor sections around the 1024-stage BBD form the
+    // anti-alias and reconstruction response. Their schematic corner values
+    // are approximately 4.8 kHz, 1.94 kHz and 4.8 kHz.
+    set(antiAlias1, Coefficients::makeFirstOrderLowPass(sampleRate, 4820.0));
+    set(antiAlias2, Coefficients::makeFirstOrderLowPass(sampleRate, 1940.0));
+    set(antiAlias3, Coefficients::makeFirstOrderLowPass(sampleRate, 4820.0));
+    set(reconstruction1, Coefficients::makeFirstOrderLowPass(sampleRate, 4820.0));
+    set(reconstruction2, Coefficients::makeFirstOrderLowPass(sampleRate, 1940.0));
+    set(reconstruction3, Coefficients::makeFirstOrderLowPass(sampleRate, 4820.0));
+    const auto capacity = static_cast<size_t>(std::ceil(sampleRate * 0.04)) + 4;
+    for (auto& channel : bbdBuffer) channel.assign(capacity, 0.0f);
+    reset();
+}
+
+void Ceres2Effect::reset()
+{
+    for (auto* bank : {&inputHighPass, &antiAlias1, &antiAlias2, &antiAlias3,
+                       &reconstruction1, &reconstruction2, &reconstruction3})
+        for (auto& filter : *bank) filter.reset();
+    for (auto& channel : bbdBuffer) std::fill(channel.begin(), channel.end(), 0.0f);
+    writePosition.fill(0); lfoPhase = 0.0f;
+}
+
+void Ceres2Effect::process(juce::AudioBuffer<float>& buffer)
+{
+    if (bypassParam.load() >= 0.5f || bbdBuffer[0].empty()) return;
+    const auto rate = juce::jmap(rateParam.load() * 0.01f, 0.25f, 3.2f);
+    const auto depth = juce::jlimit(0.0f, 1.0f, depthParam.load() * 0.01f);
+    const auto mix = juce::jlimit(0.0f, 1.0f, mixParam.load() * 0.01f);
+    const auto phaseStep = rate / static_cast<float>(sampleRate);
+    for (int i = 0; i < buffer.getNumSamples(); ++i) {
+        // Triangle motion reproduces the integrator/comparator LFO topology.
+        const auto triangle = 1.0f - 4.0f * std::abs(lfoPhase - 0.5f);
+        const auto delaySeconds = 0.0046f + triangle * depth * 0.0018f;
+        const auto delaySamples = juce::jlimit(1.0f, static_cast<float>(bbdBuffer[0].size() - 3),
+                                               delaySeconds * static_cast<float>(sampleRate));
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch) {
+            const auto c = static_cast<size_t>(juce::jmin(ch, 1));
+            auto& ring = bbdBuffer[c]; const auto write = writePosition[c];
+            const auto dry = buffer.getSample(ch, i);
+            auto input = inputHighPass[c].processSample(dry);
+            input = antiAlias1[c].processSample(input);
+            input = antiAlias2[c].processSample(input);
+            input = antiAlias3[c].processSample(input);
+            // Limited charge transfer and finite BBD signal range.
+            ring[write] = std::round(std::tanh(input * 1.35f) * 2048.0f) / 2048.0f;
+            auto readPosition = static_cast<float>(write) - delaySamples;
+            while (readPosition < 0.0f) readPosition += static_cast<float>(ring.size());
+            const auto index0 = static_cast<size_t>(readPosition) % ring.size();
+            const auto index1 = (index0 + 1) % ring.size();
+            const auto fraction = readPosition - std::floor(readPosition);
+            auto wet = ring[index0] + (ring[index1] - ring[index0]) * fraction;
+            wet = reconstruction1[c].processSample(wet);
+            wet = reconstruction2[c].processSample(wet);
+            wet = reconstruction3[c].processSample(wet);
+            buffer.setSample(ch, i, dry + (wet - dry) * mix);
+            writePosition[c] = (write + 1) % ring.size();
+        }
+        lfoPhase += phaseStep;
+        if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
+    }
+}
+
+ReverbEffect::ReverbEffect(std::atomic<float>& size, std::atomic<float>& damping,
+                           std::atomic<float>& mix, std::atomic<float>& bypass)
+    : sizeParam(size), dampingParam(damping), mixParam(mix), bypassParam(bypass) {}
+
+void ReverbEffect::prepare(const juce::dsp::ProcessSpec& spec)
+{
+    reverb.prepare(spec); reset();
+}
+
+void ReverbEffect::reset() { reverb.reset(); }
+
+void ReverbEffect::process(juce::AudioBuffer<float>& buffer)
+{
+    if (bypassParam.load() >= 0.5f) return;
+    juce::dsp::Reverb::Parameters parameters;
+    parameters.roomSize = juce::jlimit(0.0f, 1.0f, sizeParam.load() * 0.01f);
+    parameters.damping = juce::jlimit(0.0f, 1.0f, dampingParam.load() * 0.01f);
+    parameters.wetLevel = juce::jlimit(0.0f, 1.0f, mixParam.load() * 0.01f);
+    parameters.dryLevel = 1.0f - parameters.wetLevel;
+    parameters.width = 1.0f;
+    reverb.setParameters(parameters);
+    juce::dsp::AudioBlock<float> block(buffer);
+    juce::dsp::ProcessContextReplacing<float> context(block);
+    reverb.process(context);
+}
+
+DelayEffect::DelayEffect(std::atomic<float>& time, std::atomic<float>& feedback,
+                         std::atomic<float>& mix, std::atomic<float>& bypass)
+    : timeParam(time), feedbackParam(feedback), mixParam(mix), bypassParam(bypass) {}
+
+void DelayEffect::prepare(const juce::dsp::ProcessSpec& spec)
+{
+    sampleRate = spec.sampleRate;
+    const auto capacity = static_cast<size_t>(std::ceil(sampleRate * 2.0)) + 1;
+    for (auto& channel : delayBuffer) channel.assign(capacity, 0.0f);
+    reset();
+}
+
+void DelayEffect::reset()
+{
+    for (auto& channel : delayBuffer) std::fill(channel.begin(), channel.end(), 0.0f);
+    writePosition.fill(0);
+}
+
+void DelayEffect::process(juce::AudioBuffer<float>& buffer)
+{
+    if (bypassParam.load() >= 0.5f || delayBuffer[0].empty()) return;
+    const auto delaySamples = static_cast<size_t>(juce::jlimit(1.0, sampleRate * 1.95,
+        sampleRate * juce::jmap(timeParam.load() * 0.01, 0.04, 1.2)));
+    const auto feedback = juce::jlimit(0.0f, 0.92f, feedbackParam.load() * 0.0092f);
+    const auto mix = juce::jlimit(0.0f, 1.0f, mixParam.load() * 0.01f);
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch) {
+        const auto c = static_cast<size_t>(juce::jmin(ch, 1));
+        auto& ring = delayBuffer[c]; auto write = writePosition[c];
+        for (int i = 0; i < buffer.getNumSamples(); ++i) {
+            const auto read = (write + ring.size() - delaySamples) % ring.size();
+            const auto dry = buffer.getSample(ch, i); const auto wet = ring[read];
+            ring[write] = dry + wet * feedback;
+            buffer.setSample(ch, i, dry + (wet - dry) * mix);
+            write = (write + 1) % ring.size();
+        }
+        writePosition[c] = write;
+    }
 }

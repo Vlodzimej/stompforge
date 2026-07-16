@@ -25,7 +25,7 @@ int main()
     juce::ScopedJuceInitialiser_GUI juce;
     juce::dsp::ProcessSpec spec { 48000.0, 4096, 2 };
     std::atomic<float> dist{55}, tone{50}, level{65}, off{0};
-    Dist1Effect ds1(dist, tone, level, off); ds1.prepare(spec);
+    Deimos1Effect ds1(dist, tone, level, off); ds1.prepare(spec);
     auto a = makeSignal(); ds1.process(a);
 
     std::atomic<float> pre{65}, bass{55}, mid{65}, treble{55}, master{55};
@@ -34,9 +34,21 @@ int main()
     auto b = makeSignal(); amp.process(b);
     auto chain = makeSignal();
     ds1.reset(); amp.reset(); ds1.process(chain); amp.process(chain);
+
+    std::atomic<float> chorusRate{35}, chorusDepth{55}, chorusMix{35};
+    std::atomic<float> reverbSize{45}, reverbDamping{55}, reverbMix{24};
+    std::atomic<float> delayTime{28}, delayFeedback{32}, delayMix{22};
+    Ceres2Effect chorus(chorusRate, chorusDepth, chorusMix, off); chorus.prepare(spec);
+    ReverbEffect reverb(reverbSize, reverbDamping, reverbMix, off); reverb.prepare(spec);
+    DelayEffect delay(delayTime, delayFeedback, delayMix, off); delay.prepare(spec);
+    auto sixModuleChain = makeSignal();
+    ds1.reset(); amp.reset();
+    ds1.process(sixModuleChain); chorus.process(sixModuleChain); amp.process(sixModuleChain);
+    reverb.process(sixModuleChain); delay.process(sixModuleChain);
     bool shortBlocksOk = true;
     juce::dsp::ProcessSpec shortSpec { 44100.0, 32, 2 };
-    Dist1Effect shortDs1(dist, tone, level, off); shortDs1.prepare(shortSpec);
+    Deimos1Effect shortDs1(dist, tone, level, off); shortDs1.prepare(shortSpec);
+    Ceres2Effect shortCeres(chorusRate, chorusDepth, chorusMix, off); shortCeres.prepare(shortSpec);
     Mars8Effect shortAmp(pre, bass, mid, treble, master, presence, sag, cab, off); shortAmp.prepare(shortSpec);
     const auto started = std::chrono::steady_clock::now();
     constexpr int numBlocks = 4096;
@@ -54,6 +66,7 @@ int main()
         shortDs1.process(shortBuffer);
         if (n > 128)
             minimumDs1Rms = juce::jmin(minimumDs1Rms, shortBuffer.getRMSLevel(0, 0, 32));
+        shortCeres.process(shortBuffer);
         shortAmp.process(shortBuffer);
         const auto blockRms = shortBuffer.getRMSLevel(0, 0, 32);
         const auto blockPeak = shortBuffer.getMagnitude(0, 32);
@@ -69,8 +82,9 @@ int main()
     const auto realtimeDuration = numBlocks * 32.0 / 44100.0;
     std::cout << "32-sample stereo blocks=" << (shortBlocksOk ? "OK" : "FAILED")
               << " DSP load=" << (100.0 * elapsed / realtimeDuration) << "%"
-              << " min DIST-1 RMS=" << minimumDs1Rms << " min RMS=" << minimumBlockRms
+              << " min DEIMOS-1 RMS=" << minimumDs1Rms << " min RMS=" << minimumBlockRms
               << " max peak=" << maximumBlockPeak << '\n';
     std::cout << "first silent block=" << firstSilentBlock << " last RMS=" << lastBlockRms << '\n';
-    return valid("DIST-1", a) && valid("MARS-8", b) && valid("DIST-1 -> MARS-8", chain) && shortBlocksOk ? 0 : 1;
+    return valid("DEIMOS-1", a) && valid("MARS-8", b) && valid("DEIMOS-1 -> MARS-8", chain)
+        && valid("six-module chain", sixModuleChain) && shortBlocksOk ? 0 : 1;
 }
