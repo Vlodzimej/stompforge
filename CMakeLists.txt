@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(StompForge VERSION 1.0.0 LANGUAGES C CXX)
+project(StompForge VERSION 0.0.1 LANGUAGES C CXX)
 
 set(ASIO_SDK_PATH "" CACHE PATH "Path to the Steinberg ASIO SDK containing common/iasiodrv.h")
 
@@ -14,12 +14,15 @@ FetchContent_Declare(JUCE
 FetchContent_MakeAvailable(JUCE)
 
 juce_add_plugin(StompForge
-    COMPANY_NAME "StompForge Audio"
+    COMPANY_NAME "Vlodzimej Garlic"
+    COMPANY_COPYRIGHT "Copyright (c) 2026 Vlodzimej Garlic"
     BUNDLE_ID "audio.stompforge.plugin"
     PLUGIN_MANUFACTURER_CODE Sfau
     PLUGIN_CODE Stmp
     FORMATS VST3 Standalone
     PRODUCT_NAME "StompForge"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/Assets/stompforge-icon.png"
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/Assets/stompforge-icon.png"
     VST3_CATEGORIES Fx Distortion)
 
 target_sources(StompForge PRIVATE

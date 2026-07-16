@@ -34,18 +34,28 @@ public:
     APVTS parameters;
     static APVTS::ParameterLayout createParameterLayout();
 
-    enum class PedalId : int { gate = 0, ds1, tone, jcm800, chorus, reverb, delay };
-    static constexpr size_t numSlots = 6;
-    static constexpr size_t numEffects = 7;
+    enum class PedalId : int { gate = 0, ds1, tone, jcm800, chorus, reverb, delay, tuner, amp5150, impulseCab, empty = 15 };
+    static constexpr size_t numSlots = 12;
+    static constexpr size_t numEffects = 10;
+    struct TunerState { int midiNote = -1; float cents = 0.0f; float frequency = 0.0f; float confidence = 0.0f; };
+    TunerState getTunerState() const noexcept;
     std::array<PedalId, numSlots> getPedalOrder() const noexcept;
     void movePedal(int sourceSlot, int targetSlot);
     void replacePedal(int slot, PedalId replacement);
+    void clearPedal(int slot);
+    bool loadCabImpulse(const juce::File& source);
+    juce::String getCabImpulseName() const;
+    int getGridRows() const noexcept;
+    int getGridColumns() const noexcept;
+    bool setGridSize(int rows, int columns);
 
 private:
     std::array<std::unique_ptr<EffectModule>, numEffects> effects;
-    std::atomic<juce::uint32> packedOrder { 0u };
-    juce::LinearSmoothedValue<float> outputGain;
-    static juce::uint32 packOrder(const std::array<PedalId, numSlots>&) noexcept;
+    LunerEffect* luner = nullptr;
+    ImpulseCabEffect* impulseCab = nullptr;
+    std::atomic<juce::uint64> packedOrder { 0u };
+    juce::LinearSmoothedValue<float> inputGain, outputGain;
+    static juce::uint64 packOrder(const std::array<PedalId, numSlots>&) noexcept;
     void setPedalOrder(const std::array<PedalId, numSlots>&, bool saveToState);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StompForgeAudioProcessor)
 };

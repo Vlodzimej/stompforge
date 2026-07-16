@@ -32,6 +32,17 @@ int main()
     std::atomic<float> presence{50}, sag{45}, cab{1};
     Mars8Effect amp(pre, bass, mid, treble, master, presence, sag, cab, off); amp.prepare(spec);
     auto b = makeSignal(); amp.process(b);
+    std::atomic<float> ampChannel{2}, ampGain{68}, ampBass{48}, ampMid{42}, ampTreble{58};
+    std::atomic<float> ampMaster{52}, ampPresence{55}, resonance{58}, bias{22}, supply{35};
+    Vulcan5Effect vulcan(ampChannel, ampGain, ampBass, ampMid, ampTreble, ampMaster,
+        ampPresence, resonance, bias, supply, cab, off); vulcan.prepare(spec);
+    auto c = makeSignal(); vulcan.process(c);
+    std::atomic<float> irLevel{0}, irLowCut{20}, irHighCut{22000}, irMix{100};
+    ImpulseCabEffect impulse(irLevel, irLowCut, irHighCut, irMix, off);
+    juce::AudioBuffer<float> deltaIr(2, 64); deltaIr.clear();
+    deltaIr.setSample(0, 0, 1.0f); deltaIr.setSample(1, 0, 1.0f);
+    impulse.loadImpulse(std::move(deltaIr), 48000.0); impulse.prepare(spec);
+    auto irSignal = makeSignal(); impulse.process(irSignal);
     auto chain = makeSignal();
     ds1.reset(); amp.reset(); ds1.process(chain); amp.process(chain);
 
@@ -39,17 +50,55 @@ int main()
     std::atomic<float> reverbSize{45}, reverbDamping{55}, reverbMix{24};
     std::atomic<float> delayTime{28}, delayFeedback{32}, delayMix{22};
     Ceres2Effect chorus(chorusRate, chorusDepth, chorusMix, off); chorus.prepare(spec);
-    ReverbEffect reverb(reverbSize, reverbDamping, reverbMix, off); reverb.prepare(spec);
-    DelayEffect delay(delayTime, delayFeedback, delayMix, off); delay.prepare(spec);
+    VoidChamberEffect reverb(reverbSize, reverbDamping, reverbMix, off); reverb.prepare(spec);
+    PulsarEffect delay(delayTime, delayFeedback, delayMix, off); delay.prepare(spec);
     auto sixModuleChain = makeSignal();
     ds1.reset(); amp.reset();
     ds1.process(sixModuleChain); chorus.process(sixModuleChain); amp.process(sixModuleChain);
     reverb.process(sixModuleChain); delay.process(sixModuleChain);
+
+    LunerEffect luner(off); luner.prepare(spec);
+    juce::AudioBuffer<float> tunerSignal(2, 8192);
+    for (int i = 0; i < tunerSignal.getNumSamples(); ++i) {
+        const auto sample = 0.15f * std::sin(juce::MathConstants<float>::twoPi * 110.0f * i / 48000.0f);
+        tunerSignal.setSample(0, i, sample); tunerSignal.setSample(1, i, sample);
+    }
+    luner.process(tunerSignal);
+    const auto tunerOk = luner.getMidiNote() == 45 && std::abs(luner.getCents()) < 2.0f
+        && luner.getConfidence() >= 0.55f;
+    std::cout << "LUNER note=" << luner.getMidiNote() << " cents=" << luner.getCents()
+              << " confidence=" << luner.getConfidence() << '\n';
+    auto quietSignal = [] (float amplitude) {
+        juce::AudioBuffer<float> buffer(2, 4096);
+        for (int i = 0; i < buffer.getNumSamples(); ++i) {
+            const auto sample = amplitude * std::sin(juce::MathConstants<float>::twoPi * 375.0f * i / 48000.0f);
+            buffer.setSample(0, i, sample); buffer.setSample(1, i, sample);
+        }
+        return buffer;
+    };
+    pre.store(0.0f); cab.store(0.0f); amp.reset();
+    auto marsQuietA = quietSignal(0.001f); amp.process(marsQuietA); amp.reset();
+    auto marsQuietB = quietSignal(0.0005f); amp.process(marsQuietB);
+    ampChannel.store(0.0f); ampGain.store(68.0f); vulcan.reset();
+    auto vulcanQuietA = quietSignal(0.001f); vulcan.process(vulcanQuietA); vulcan.reset();
+    auto vulcanQuietB = quietSignal(0.0005f); vulcan.process(vulcanQuietB);
+    const auto quietRatio = [] (const auto& loud, const auto& quiet) {
+        return loud.getRMSLevel(0, 2048, 2048) / juce::jmax(1.0e-12f, quiet.getRMSLevel(0, 2048, 2048));
+    };
+    const auto marsQuietRatio = quietRatio(marsQuietA, marsQuietB);
+    const auto vulcanQuietRatio = quietRatio(vulcanQuietA, vulcanQuietB);
+    const auto quietLinearityOk = marsQuietRatio > 1.9f && marsQuietRatio < 2.1f
+        && vulcanQuietRatio > 1.9f && vulcanQuietRatio < 2.1f;
+    std::cout << "quiet-signal ratios MARS-8=" << marsQuietRatio
+              << " VULCAN-5=" << vulcanQuietRatio << '\n';
+    pre.store(65.0f); cab.store(1.0f); ampChannel.store(2.0f);
     bool shortBlocksOk = true;
     juce::dsp::ProcessSpec shortSpec { 44100.0, 32, 2 };
     Deimos1Effect shortDs1(dist, tone, level, off); shortDs1.prepare(shortSpec);
     Ceres2Effect shortCeres(chorusRate, chorusDepth, chorusMix, off); shortCeres.prepare(shortSpec);
     Mars8Effect shortAmp(pre, bass, mid, treble, master, presence, sag, cab, off); shortAmp.prepare(shortSpec);
+    Vulcan5Effect shortVulcan(ampChannel, ampGain, ampBass, ampMid, ampTreble, ampMaster,
+        ampPresence, resonance, bias, supply, cab, off); shortVulcan.prepare(shortSpec);
     const auto started = std::chrono::steady_clock::now();
     constexpr int numBlocks = 4096;
     float minimumBlockRms = std::numeric_limits<float>::max();
@@ -68,6 +117,7 @@ int main()
             minimumDs1Rms = juce::jmin(minimumDs1Rms, shortBuffer.getRMSLevel(0, 0, 32));
         shortCeres.process(shortBuffer);
         shortAmp.process(shortBuffer);
+        shortVulcan.process(shortBuffer);
         const auto blockRms = shortBuffer.getRMSLevel(0, 0, 32);
         const auto blockPeak = shortBuffer.getMagnitude(0, 32);
         lastBlockRms = blockRms;
@@ -85,6 +135,8 @@ int main()
               << " min DEIMOS-1 RMS=" << minimumDs1Rms << " min RMS=" << minimumBlockRms
               << " max peak=" << maximumBlockPeak << '\n';
     std::cout << "first silent block=" << firstSilentBlock << " last RMS=" << lastBlockRms << '\n';
-    return valid("DEIMOS-1", a) && valid("MARS-8", b) && valid("DEIMOS-1 -> MARS-8", chain)
-        && valid("six-module chain", sixModuleChain) && shortBlocksOk ? 0 : 1;
+    return valid("DEIMOS-1", a) && valid("MARS-8", b) && valid("VULCAN-5", c)
+        && valid("IMPULSE delta IR", irSignal)
+        && valid("DEIMOS-1 -> MARS-8", chain)
+        && valid("six-module chain", sixModuleChain) && tunerOk && quietLinearityOk && shortBlocksOk ? 0 : 1;
 }

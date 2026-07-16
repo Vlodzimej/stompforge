@@ -1,5 +1,6 @@
 build/
 .tools/
+dist/
 .DS_Store
 *.user
 *.suo
