@@ -26,6 +26,7 @@ private:
     std::unique_ptr<SliderAttachment> inputAttachment, outputAttachment;
 
     void layoutPedals();
+    void updateResizeLimitsForGrid(bool growIfNeeded);
     juce::Rectangle<int> getGridCellBounds(int slot) const;
     void showEffectMenu(int slot);
     void showGridSelector();

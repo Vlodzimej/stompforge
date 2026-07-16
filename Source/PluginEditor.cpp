@@ -2,6 +2,10 @@
 
 namespace
 {
+constexpr int pedalCellWidth = 290;
+constexpr int pedalCellHeight = 270;
+constexpr int pedalCellGap = 10;
+
 void configureKnob(juce::Slider& knob, juce::Colour colour)
 {
     knob.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -36,7 +40,9 @@ public:
             for (int column = 0; column < 4; ++column) {
                 auto cell = juce::Rectangle<float>(area.getX() + column * cellWidth,
                     area.getY() + row * cellHeight, cellWidth, cellHeight).reduced(5.0f);
-                const auto inSelection = row < rows && column < columns;
+                const auto previewRows = hoveredRows > 0 ? hoveredRows : rows;
+                const auto previewColumns = hoveredColumns > 0 ? hoveredColumns : columns;
+                const auto inSelection = row < previewRows && column < previewColumns;
                 g.setColour(inSelection ? juce::Colour(0xffa34f24) : juce::Colour(0xff272c35));
                 g.fillRoundedRectangle(cell, 7.0f);
                 g.setColour(inSelection ? juce::Colour(0xffffc77d) : juce::Colour(0xff59616e));
@@ -47,20 +53,41 @@ public:
                                cell.getRight() - 8.0f, cell.getY() + 8.0f, 1.0f);
                 }
             }
+        const auto previewRows = hoveredRows > 0 ? hoveredRows : rows;
+        const auto previewColumns = hoveredColumns > 0 ? hoveredColumns : columns;
         const auto selectedBounds = juce::Rectangle<float>(area.getX(), area.getY(),
-            cellWidth * columns, cellHeight * rows).reduced(2.0f);
+            cellWidth * previewColumns, cellHeight * previewRows).reduced(2.0f);
         g.setColour(juce::Colour(0xffffd28c)); g.drawRoundedRectangle(selectedBounds, 9.0f, 3.0f);
-        const auto first = juce::Rectangle<float>(area.getX() + (columns - 1) * cellWidth,
-            area.getY() + (rows - 1) * cellHeight, cellWidth, cellHeight).reduced(7.0f);
+        const auto first = juce::Rectangle<float>(area.getX() + (previewColumns - 1) * cellWidth,
+            area.getY() + (previewRows - 1) * cellHeight, cellWidth, cellHeight).reduced(7.0f);
         const auto last = juce::Rectangle<float>(area.getX(), area.getY(), cellWidth, cellHeight).reduced(7.0f);
         g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
         g.setColour(juce::Colour(0xffbdf0ff));
         g.drawText("INPUT", first.toNearestInt().removeFromBottom(18), juce::Justification::centred);
         g.drawText("OUTPUT", last.toNearestInt().removeFromTop(18), juce::Justification::centred);
         g.setColour(juce::Colour(0xffffc77d)); g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
-        g.drawText(juce::String(columns) + " x " + juce::String(rows), 18, 280,
+        g.drawText((hoveredRows > 0 ? "PREVIEW  " : "CURRENT  ")
+                       + juce::String(previewColumns) + " x " + juce::String(previewRows), 18, 280,
                    getWidth() - 36, 20, juce::Justification::centred);
     }
+
+    void mouseMove(const juce::MouseEvent& event) override
+    {
+        const auto area = gridArea();
+        if (!area.contains(event.position)) {
+            clearHover();
+            return;
+        }
+        const auto newColumns = juce::jlimit(1, 4, 1 + static_cast<int>((event.position.x - area.getX()) / (area.getWidth() / 4.0f)));
+        const auto newRows = juce::jlimit(1, 3, 1 + static_cast<int>((event.position.y - area.getY()) / (area.getHeight() / 3.0f)));
+        if (newRows != hoveredRows || newColumns != hoveredColumns) {
+            hoveredRows = newRows;
+            hoveredColumns = newColumns;
+            repaint();
+        }
+    }
+
+    void mouseExit(const juce::MouseEvent&) override { clearHover(); }
 
     void mouseDown(const juce::MouseEvent& event) override
     {
@@ -73,8 +100,15 @@ public:
     }
 
 private:
+    void clearHover()
+    {
+        if (hoveredRows == 0 && hoveredColumns == 0) return;
+        hoveredRows = hoveredColumns = 0;
+        repaint();
+    }
     juce::Rectangle<float> gridArea() const { return { 42.0f, 70.0f, 356.0f, 200.0f }; }
     int rows, columns;
+    int hoveredRows = 0, hoveredColumns = 0;
     std::function<void(int, int)> onSelected;
 };
 }
@@ -444,8 +478,8 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
     gridButton.onClick = [this] { showGridSelector(); };
     addAndMakeVisible(gridButton);
     setResizable(true, true);
-    setResizeLimits(800, 620, 1440, 960);
     setSize(1100, 760);
+    updateResizeLimitsForGrid(true);
     startTimerHz(20);
 }
 
@@ -463,7 +497,10 @@ void StompForgeAudioProcessorEditor::showGridSelector()
     options.content.setOwned(new GridSelector(processor.getGridRows(), processor.getGridColumns(),
         [safeThis] (int rows, int columns) {
             if (safeThis == nullptr) return;
-            if (safeThis->processor.setGridSize(rows, columns)) safeThis->layoutPedals();
+            if (safeThis->processor.setGridSize(rows, columns)) {
+                safeThis->updateResizeLimitsForGrid(true);
+                safeThis->layoutPedals();
+            }
         }));
     options.launchAsync();
 }
@@ -524,15 +561,15 @@ void StompForgeAudioProcessorEditor::paint(juce::Graphics& g)
                juce::Justification::centredLeft);
     const auto order = processor.getPedalOrder();
     const auto capacity = processor.getGridRows() * processor.getGridColumns();
-    int firstActive = -1, lastActive = -1;
+    std::vector<int> activeSlots;
+    activeSlots.reserve(static_cast<size_t>(capacity));
     for (int slot = 0; slot < capacity; ++slot)
-        if (order[static_cast<size_t>(slot)] != StompForgeAudioProcessor::PedalId::empty) {
-            if (firstActive < 0) firstActive = slot;
-            lastActive = slot;
-        }
-    if (firstActive >= 0) {
+        if (order[static_cast<size_t>(slot)] != StompForgeAudioProcessor::PedalId::empty)
+            activeSlots.push_back(slot);
+    if (!activeSlots.empty()) {
         std::vector<juce::Point<float>> routePoints;
-        for (int slot = firstActive; slot <= lastActive; ++slot)
+        routePoints.reserve(activeSlots.size());
+        for (const auto slot : activeSlots)
             routePoints.push_back(getGridCellBounds(slot).toFloat().getCentre());
         auto portTowards = [] (const juce::Rectangle<float>& bounds, juce::Point<float> direction) {
             const auto centre = bounds.getCentre();
@@ -540,8 +577,8 @@ void StompForgeAudioProcessorEditor::paint(juce::Graphics& g)
                 return juce::Point<float>(direction.x >= 0.0f ? bounds.getRight() : bounds.getX(), centre.y);
             return juce::Point<float>(centre.x, direction.y >= 0.0f ? bounds.getBottom() : bounds.getY());
         };
-        const auto firstBounds = getGridCellBounds(firstActive).toFloat();
-        const auto lastBounds = getGridCellBounds(lastActive).toFloat();
+        const auto firstBounds = getGridCellBounds(activeSlots.front()).toFloat();
+        const auto lastBounds = getGridCellBounds(activeSlots.back()).toFloat();
         const auto startPort = routePoints.size() > 1
             ? portTowards(firstBounds, { routePoints.front().x - routePoints[1].x,
                                          routePoints.front().y - routePoints[1].y })
@@ -594,6 +631,30 @@ void StompForgeAudioProcessorEditor::paint(juce::Graphics& g)
                          tip.y - direction.y * 10.0f - normal.y * 5.0f); arrow.closeSubPath();
             g.fillPath(arrow);
         }
+
+        // Empty slots act like frosted glass over a cable passing beneath them.
+        // The opaque veil first mutes the normal cable, then several clipped,
+        // progressively wider strokes recreate a soft liquid-glass blur.
+        for (int slot = 0; slot < capacity; ++slot) {
+            if (order[static_cast<size_t>(slot)] != StompForgeAudioProcessor::PedalId::empty)
+                continue;
+            const auto glassBounds = getGridCellBounds(slot).reduced(5);
+            juce::Graphics::ScopedSaveState savedState(g);
+            g.reduceClipRegion(glassBounds);
+            g.setColour(juce::Colour(0xb811151b));
+            g.fillRoundedRectangle(glassBounds.toFloat(), 12.0f);
+            g.setColour(juce::Colour(0x1028b8e8));
+            g.strokePath(signalPath, juce::PathStrokeType(18.0f));
+            g.setColour(juce::Colour(0x1e65d9ff));
+            g.strokePath(signalPath, juce::PathStrokeType(10.0f));
+            g.setColour(juce::Colour(0x5265d9ff));
+            g.strokePath(signalPath, juce::PathStrokeType(2.0f));
+            juce::ColourGradient glassSheen(juce::Colour(0x24ffffff), static_cast<float>(glassBounds.getX()),
+                static_cast<float>(glassBounds.getY()), juce::Colour(0x08000000),
+                static_cast<float>(glassBounds.getRight()), static_cast<float>(glassBounds.getBottom()), false);
+            g.setGradientFill(glassSheen);
+            g.fillRoundedRectangle(glassBounds.toFloat(), 12.0f);
+        }
     }
     g.setColour(juce::Colour(0xff2b2e36));
     g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(10.0f), 10.0f, 1.5f);
@@ -621,18 +682,37 @@ void StompForgeAudioProcessorEditor::layoutPedals()
     repaint();
 }
 
+void StompForgeAudioProcessorEditor::updateResizeLimitsForGrid(bool growIfNeeded)
+{
+    // These dimensions keep rotary controls, labels and the two-row amp layouts
+    // large enough for accurate mouse operation in every effect module.
+    constexpr int horizontalChrome = 18 * 2 + 100 * 2;
+    constexpr int verticalChrome = 18 * 2 + 70 + 12;
+    const auto columns = processor.getGridColumns();
+    const auto rows = processor.getGridRows();
+    const auto minimumWidth = horizontalChrome + columns * pedalCellWidth + (columns - 1) * pedalCellGap;
+    const auto minimumHeight = verticalChrome + rows * pedalCellHeight + (rows - 1) * pedalCellGap;
+
+    setResizeLimits(minimumWidth, minimumHeight, 1920, 1200);
+    if (growIfNeeded && (getWidth() < minimumWidth || getHeight() < minimumHeight))
+        setSize(juce::jmax(getWidth(), minimumWidth), juce::jmax(getHeight(), minimumHeight));
+}
+
 juce::Rectangle<int> StompForgeAudioProcessorEditor::getGridCellBounds(int slot) const
 {
     auto area = getLocalBounds().reduced(18).withTrimmedTop(70).withTrimmedBottom(12);
     area.removeFromLeft(100); area.removeFromRight(100);
-    const int columns = processor.getGridColumns(), rows = processor.getGridRows(), gap = 10;
-    const int width = (area.getWidth() - gap * (columns - 1)) / columns;
-    const int height = (area.getHeight() - gap * (rows - 1)) / rows;
+    const int columns = processor.getGridColumns(), rows = processor.getGridRows();
+    const auto matrixWidth = columns * pedalCellWidth + (columns - 1) * pedalCellGap;
+    const auto matrixHeight = rows * pedalCellHeight + (rows - 1) * pedalCellGap;
+    area = area.withSizeKeepingCentre(matrixWidth, matrixHeight);
     const int capacity = rows * columns;
     slot = juce::jlimit(0, capacity - 1, slot);
     const auto visualIndex = capacity - 1 - slot;
     const auto column = visualIndex % columns, row = visualIndex / columns;
-    return { area.getX() + column * (width + gap), area.getY() + row * (height + gap), width, height };
+    return { area.getX() + column * (pedalCellWidth + pedalCellGap),
+             area.getY() + row * (pedalCellHeight + pedalCellGap),
+             pedalCellWidth, pedalCellHeight };
 }
 
 void StompForgeAudioProcessorEditor::resized()
