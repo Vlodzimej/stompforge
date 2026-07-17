@@ -60,7 +60,7 @@ Audit date: 2026-07-17. This is an engineering checklist, not legal advice.
 
 - [x] Russian and English documentation matches the release.
 - [x] Russian and English changelogs match the release notes.
-- [ ] Annotated tag `v0.0.2-alpha` created.
-- [ ] GitHub Release marked as a pre-release.
-- [ ] Installer, portable package, checksums and known limitations attached.
-- [ ] Matching source archive retained.
+- [x] Annotated tag `v0.0.2-alpha` created.
+- [x] GitHub Release marked as a pre-release.
+- [x] Installer, portable package, checksums and known limitations attached.
+- [x] Matching source archive retained.

@@ -72,7 +72,7 @@ ASIO SDK.
 
 - [x] Русская и английская документация соответствует фактическому содержимому.
 - [x] `CHANGELOG.md` и `CHANGELOG.en.md` соответствуют release notes.
-- [ ] Создан annotated tag `v0.0.2-alpha`.
-- [ ] GitHub Release помечен как pre-release.
-- [ ] Приложены installer, portable VST3 archive, checksum и known limitations.
-- [ ] Сохранена копия исходников, соответствующая опубликованным бинарникам.
+- [x] Создан annotated tag `v0.0.2-alpha`.
+- [x] GitHub Release помечен как pre-release.
+- [x] Приложены installer, portable package, checksum и known limitations.
+- [x] Сохранена копия исходников, соответствующая опубликованным бинарникам.
