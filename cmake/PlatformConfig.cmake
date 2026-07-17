@@ -8,6 +8,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         message(FATAL_ERROR "StompForge iOS builds require the Xcode generator")
     endif()
 
+    set(CMAKE_XCODE_GENERATE_SCHEME TRUE)
     set(STOMPFORGE_BUNDLE_ID "${STOMPFORGE_IOS_BUNDLE_ID}")
     set(STOMPFORGE_PLUGIN_FORMATS Standalone AUv3)
     set(STOMPFORGE_PLATFORM_OPTIONS
@@ -16,16 +17,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
             "StompForge needs microphone access to process a connected guitar in the standalone app."
         FILE_SHARING_ENABLED TRUE
         BACKGROUND_AUDIO_ENABLED TRUE
+        REQUIRES_FULL_SCREEN TRUE
         APP_GROUPS_ENABLED TRUE
         APP_GROUP_IDS "${STOMPFORGE_IOS_APP_GROUP_ID}"
         TARGETED_DEVICE_FAMILY "1,2"
         IPHONE_SCREEN_ORIENTATIONS
-            UIInterfaceOrientationPortrait
             UIInterfaceOrientationLandscapeLeft
             UIInterfaceOrientationLandscapeRight
         IPAD_SCREEN_ORIENTATIONS
-            UIInterfaceOrientationPortrait
-            UIInterfaceOrientationPortraitUpsideDown
             UIInterfaceOrientationLandscapeLeft
             UIInterfaceOrientationLandscapeRight)
 else()

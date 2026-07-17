@@ -141,6 +141,7 @@ bool StompForgeAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts
 
 void StompForgeAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    modeler->setLinkedChannels(wrapperType == wrapperType_Standalone);
     juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(samplesPerBlock),
                                static_cast<juce::uint32>(getTotalNumOutputChannels())};
     for (auto& effect : effects) effect->prepare(spec);
@@ -259,6 +260,20 @@ bool StompForgeAudioProcessor::loadCabImpulse(const juce::File& source)
     return true;
 }
 
+bool StompForgeAudioProcessor::loadCabImpulse(const juce::URL& source)
+{
+    if (impulseCab == nullptr) return false;
+    juce::String error;
+    const auto cached = stompforge::AssetRepository::importURL(source, "ImpulseResponses", error);
+    if (!cached.existsAsFile()) return false;
+    impulseCab->loadImpulse(cached);
+    parameters.state.setProperty("irOriginalPath", source.toString(false), nullptr);
+    parameters.state.setProperty("irCachedPath", cached.getFullPathName(), nullptr);
+    parameters.state.setProperty("irDisplayName",
+                                 source.getLocalFile().getFileNameWithoutExtension(), nullptr);
+    return true;
+}
+
 juce::String StompForgeAudioProcessor::getCabImpulseName() const
 {
     return parameters.state.getProperty("irDisplayName", "NO IR LOADED").toString();
@@ -276,6 +291,22 @@ bool StompForgeAudioProcessor::loadModelerModel(const juce::File& source, juce::
     parameters.state.setProperty("modelerOriginalPath", source.getFullPathName(), nullptr);
     parameters.state.setProperty("modelerPath", cached.getFullPathName(), nullptr);
     parameters.state.setProperty("modelerDisplayName", source.getFileNameWithoutExtension(), nullptr);
+    return true;
+}
+
+bool StompForgeAudioProcessor::loadModelerModel(const juce::URL& source, juce::String& error)
+{
+    if (modeler == nullptr) return false;
+    const auto cached = stompforge::AssetRepository::importURL(source, "NAMModels", error);
+    if (!cached.existsAsFile()) return false;
+    if (!modeler->loadModel(cached, error)) {
+        cached.deleteFile();
+        return false;
+    }
+    parameters.state.setProperty("modelerOriginalPath", source.toString(false), nullptr);
+    parameters.state.setProperty("modelerPath", cached.getFullPathName(), nullptr);
+    parameters.state.setProperty("modelerDisplayName",
+                                 source.getLocalFile().getFileNameWithoutExtension(), nullptr);
     return true;
 }
 

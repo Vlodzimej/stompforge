@@ -17,12 +17,14 @@ private:
     class PedalCard;
     class GridCell;
     class LevelFader;
+    class TouchMenuLookAndFeel;
     StompForgeAudioProcessor& processor;
     std::array<std::unique_ptr<PedalCard>, StompForgeAudioProcessor::numEffects> pedals;
     std::array<std::unique_ptr<GridCell>, StompForgeAudioProcessor::numSlots> gridCells;
     std::unique_ptr<LevelFader> inputFader, outputFader;
     juce::Label inputLabel, outputLabel;
     juce::TextButton gridButton;
+    std::unique_ptr<TouchMenuLookAndFeel> touchMenuLookAndFeel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<SliderAttachment> inputAttachment, outputAttachment;
 

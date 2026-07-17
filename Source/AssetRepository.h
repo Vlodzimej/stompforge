@@ -14,6 +14,9 @@ public:
     static juce::File importFile(const juce::File& source,
                                  const juce::String& category,
                                  juce::String& error);
+    static juce::File importURL(const juce::URL& source,
+                                const juce::String& category,
+                                juce::String& error);
 
 private:
     static juce::String makeSafeFileName(const juce::File& source);

@@ -44,8 +44,10 @@ public:
     void replacePedal(int slot, PedalId replacement);
     void clearPedal(int slot);
     bool loadCabImpulse(const juce::File& source);
+    bool loadCabImpulse(const juce::URL& source);
     juce::String getCabImpulseName() const;
     bool loadModelerModel(const juce::File& source, juce::String& error);
+    bool loadModelerModel(const juce::URL& source, juce::String& error);
     juce::String getModelerName() const;
     int getGridRows() const noexcept;
     int getGridColumns() const noexcept;

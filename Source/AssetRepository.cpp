@@ -79,4 +79,67 @@ juce::File AssetRepository::importFile(const juce::File& source,
 
     return destination;
 }
+
+juce::File AssetRepository::importURL(const juce::URL& source,
+                                      const juce::String& category,
+                                      juce::String& error)
+{
+    if (!source.isLocalFile())
+    {
+        error = "The selected asset is not a local file.";
+        return {};
+    }
+
+    auto input = source.createInputStream(
+        juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress));
+    if (input == nullptr)
+    {
+        error = "Unable to access the selected file. Download it locally in Files and try again.";
+        return {};
+    }
+
+    const auto root = getRootDirectory();
+    if (root.getFullPathName().isEmpty())
+    {
+        error = "The StompForge App Group container is unavailable. Check the app entitlement.";
+        return {};
+    }
+
+    const auto directory = root.getChildFile(category);
+    const auto createResult = directory.createDirectory();
+    if (createResult.failed())
+    {
+        error = "Unable to create the StompForge asset directory: "
+            + createResult.getErrorMessage();
+        return {};
+    }
+
+    const auto sourceFile = source.getLocalFile();
+    auto stem = sourceFile.getFileNameWithoutExtension()
+        .retainCharacters("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_ ");
+    if (stem.isEmpty())
+        stem = "Imported";
+    const auto destination = directory.getChildFile(
+        stem + "-" + juce::String(input->getTotalLength()) + "-"
+        + juce::String::toHexString(source.toString(false).hashCode64())
+        + sourceFile.getFileExtension().toLowerCase());
+
+    if (destination.existsAsFile() && !destination.deleteFile())
+    {
+        error = "Unable to replace the previously imported asset.";
+        return {};
+    }
+
+    juce::FileOutputStream output(destination);
+    const auto bytesWritten = output.failedToOpen() ? -1 : output.writeFromInputStream(*input, -1);
+    output.flush();
+    if (bytesWritten <= 0 || output.getStatus().failed())
+    {
+        destination.deleteFile();
+        error = "Unable to copy the selected file into StompForge storage.";
+        return {};
+    }
+
+    return destination;
+}
 }

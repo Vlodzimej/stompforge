@@ -174,6 +174,7 @@ public:
     void process(juce::AudioBuffer<float>&) override;
     bool loadModel(const juce::File&, juce::String& error);
     juce::String getModelName() const;
+    void setLinkedChannels(bool shouldLink) noexcept { linkedChannels = shouldLink; }
 
 private:
     struct Impl;
@@ -182,6 +183,7 @@ private:
     std::atomic<float>& outputParam;
     std::atomic<float>& mixParam;
     std::atomic<float>& bypassParam;
+    bool linkedChannels = false;
 };
 
 class ImpulseCabEffect final : public EffectModule

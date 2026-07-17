@@ -59,7 +59,7 @@ void Deimos1Effect::prepare(const juce::dsp::ProcessSpec& spec)
     oversampling->initProcessing(spec.maximumBlockSize);
     oversampledRate = spec.sampleRate * oversampling->getOversamplingFactor();
     juce::dsp::ProcessSpec highRateSpec{oversampledRate,
-        spec.maximumBlockSize * oversampling->getOversamplingFactor(), 1};
+        static_cast<juce::uint32>(spec.maximumBlockSize * oversampling->getOversamplingFactor()), 1};
     for (auto* bank : {&inputHighPass, &transistorLowPass, &opAmpHighPass, &clippingLowPass,
                        &toneLowPass, &toneHighPass, &dcBlock})
         for (auto& filter : *bank) filter.prepare(highRateSpec);
@@ -215,7 +215,7 @@ void Mars8Effect::prepare(const juce::dsp::ProcessSpec& spec)
     oversampling->initProcessing(spec.maximumBlockSize);
     highRate = spec.sampleRate * oversampling->getOversamplingFactor();
     juce::dsp::ProcessSpec osSpec { highRate,
-        spec.maximumBlockSize * oversampling->getOversamplingFactor(), 1 };
+        static_cast<juce::uint32>(spec.maximumBlockSize * oversampling->getOversamplingFactor()), 1 };
     for (auto* bank : {&inputHighPass, &brightHighPass, &toneLow, &toneMid, &toneHigh,
                        &transformerHighPass, &transformerLowPass, &cabHighPass, &cabLowPass,
                        &cabLowBody, &cabMidScoop, &cabPresence, &cabTopNotch})
@@ -348,7 +348,7 @@ void Vulcan5Effect::prepare(const juce::dsp::ProcessSpec& spec)
     oversampling->initProcessing(spec.maximumBlockSize);
     highRate = spec.sampleRate * oversampling->getOversamplingFactor();
     juce::dsp::ProcessSpec osSpec { highRate,
-        spec.maximumBlockSize * oversampling->getOversamplingFactor(), 1 };
+        static_cast<juce::uint32>(spec.maximumBlockSize * oversampling->getOversamplingFactor()), 1 };
     for (auto* bank : {&inputHighPass, &interstageLowPass1, &interstageLowPass2,
                        &toneLow, &toneMid, &toneHigh, &transformerHighPass,
                        &transformerLowPass, &resonanceShelf, &cabHighPass,
@@ -687,6 +687,21 @@ void ModelerEffect::process(juce::AudioBuffer<float>& buffer)
     const auto inputGain = juce::Decibels::decibelsToGain(inputParam.load());
     const auto outputGain = juce::Decibels::decibelsToGain(outputParam.load());
     const auto wet = juce::jlimit(0.0f, 1.0f, mixParam.load() * 0.01f);
+
+    if (linkedChannels && channels > 0) {
+        auto* input = impl->inputScratch[0].data();
+        auto* output = impl->outputScratch[0].data();
+        juce::FloatVectorOperations::copyWithMultiply(
+            input, buffer.getReadPointer(0), inputGain, samples);
+        model->channels[0]->process(input, output, samples);
+        for (int channel = 0; channel < channels; ++channel) {
+            auto* audio = buffer.getWritePointer(channel);
+            for (int sample = 0; sample < samples; ++sample)
+                audio[sample] += (output[sample] * outputGain - audio[sample]) * wet;
+        }
+        return;
+    }
+
     for (int channel = 0; channel < channels; ++channel) {
         auto* audio = buffer.getWritePointer(channel);
         auto* input = impl->inputScratch[static_cast<size_t>(channel)].data();
