@@ -58,6 +58,34 @@ int main(int argc, char* argv[])
     if (modelerLoaded) modeler.process(loadedModelerSignal);
     const auto loadedModelerOk = modelerLoaded && valid("MODELER loaded model", loadedModelerSignal);
     if (!modelerLoaded) std::cout << "MODELER load failed: " << modelerError << '\n';
+    std::atomic<float> linkedModelerInput{0}, linkedModelerOutput{0}, linkedModelerMix{100};
+    ModelerEffect linkedModeler(linkedModelerInput, linkedModelerOutput, linkedModelerMix, off);
+    linkedModeler.setLinkedChannels(true);
+    juce::dsp::ProcessSpec linkedModelerSpec { 48000.0, 128, 2 };
+    linkedModeler.prepare(linkedModelerSpec);
+    juce::String linkedModelerError;
+    const auto linkedModelerLoaded = linkedModeler.loadModel(modelPath, linkedModelerError);
+    bool linkedModelerOk = linkedModelerLoaded;
+    float linkedModelerMinimumRms = std::numeric_limits<float>::max();
+    for (int block = 0; block < 512 && linkedModelerOk; ++block) {
+        juce::AudioBuffer<float> shortModelerSignal(2, 128);
+        for (int sample = 0; sample < shortModelerSignal.getNumSamples(); ++sample) {
+            const auto value = 0.12f * std::sin(
+                juce::MathConstants<float>::twoPi * 220.0f * (block * 128 + sample) / 48000.0f);
+            shortModelerSignal.setSample(0, sample, value);
+            shortModelerSignal.setSample(1, sample, value);
+        }
+        linkedModeler.process(shortModelerSignal);
+        const auto rms = shortModelerSignal.getRMSLevel(0, 0, shortModelerSignal.getNumSamples());
+        const auto peak = shortModelerSignal.getMagnitude(0, shortModelerSignal.getNumSamples());
+        if (block > 32)
+            linkedModelerMinimumRms = juce::jmin(linkedModelerMinimumRms, rms);
+        linkedModelerOk &= std::isfinite(rms) && std::isfinite(peak)
+            && (block <= 32 || rms > 1.0e-6f) && peak < 10.0f;
+    }
+    std::cout << "MODELER linked 128-sample blocks="
+              << (linkedModelerOk ? "OK" : "FAILED")
+              << " min RMS=" << linkedModelerMinimumRms << '\n';
     auto chain = makeSignal();
     ds1.reset(); amp.reset(); ds1.process(chain); amp.process(chain);
 
@@ -152,7 +180,7 @@ int main(int argc, char* argv[])
     std::cout << "first silent block=" << firstSilentBlock << " last RMS=" << lastBlockRms << '\n';
     return valid("DEIMOS-1", a) && valid("MARS-8", b) && valid("VULCAN-5", c)
         && valid("IMPULSE delta IR", irSignal)
-        && unloadedModelerOk && loadedModelerOk
+        && unloadedModelerOk && loadedModelerOk && linkedModelerOk
         && valid("DEIMOS-1 -> MARS-8", chain)
         && valid("six-module chain", sixModuleChain) && tunerOk && quietLinearityOk && shortBlocksOk ? 0 : 1;
 }

@@ -633,7 +633,8 @@ void ModelerEffect::prepare(const juce::dsp::ProcessSpec& spec)
     for (auto& buffer : impl->outputScratch) buffer.resize(spec.maximumBlockSize);
     for (auto& stereo : impl->models)
         for (auto& channel : stereo->channels) {
-            channel->reset(spec.sampleRate, impl->maximumBlockSize);
+            if (channel != nullptr)
+                channel->reset(spec.sampleRate, impl->maximumBlockSize);
         }
 }
 
@@ -641,21 +642,28 @@ void ModelerEffect::reset()
 {
     if (auto* model = impl->active.load(std::memory_order_acquire))
         for (auto& channel : model->channels)
-            channel->reset(impl->sampleRate, impl->maximumBlockSize);
+            if (channel != nullptr)
+                channel->reset(impl->sampleRate, impl->maximumBlockSize);
 }
 
 bool ModelerEffect::loadModel(const juce::File& file, juce::String& error)
 {
+   #if JUCE_IOS
+    juce::ignoreUnused(file);
+    error = "MODELER is unavailable on iOS and iPadOS.";
+    return false;
+   #else
     if (!file.existsAsFile()) { error = "The selected NAM model does not exist."; return false; }
     try {
         const auto path = std::filesystem::u8path(file.getFullPathName().toStdString());
         auto stereo = std::make_unique<Impl::StereoModel>();
-        for (auto& channel : stereo->channels) {
+        const auto channelsToCreate = linkedChannels ? 1u : stereo->channels.size();
+        for (size_t channelIndex = 0; channelIndex < channelsToCreate; ++channelIndex) {
             auto model = nam::get_dsp(path, nam::DspLoadOptions { false });
             if (model->NumInputChannels() != 1 || model->NumOutputChannels() != 1)
                 throw std::runtime_error("MODELER supports mono-input, mono-output NAM files.");
-            channel = std::make_unique<ResampledNamModel>(std::move(model), impl->sampleRate,
-                                                          impl->maximumBlockSize);
+            stereo->channels[channelIndex] = std::make_unique<ResampledNamModel>(
+                std::move(model), impl->sampleRate, impl->maximumBlockSize);
         }
         stereo->name = file.getFileNameWithoutExtension();
         auto* ready = stereo.get();
@@ -666,6 +674,7 @@ bool ModelerEffect::loadModel(const juce::File& file, juce::String& error)
         error = exception.what();
         return false;
     }
+   #endif
 }
 
 juce::String ModelerEffect::getModelName() const
@@ -677,6 +686,10 @@ juce::String ModelerEffect::getModelName() const
 
 void ModelerEffect::process(juce::AudioBuffer<float>& buffer)
 {
+   #if JUCE_IOS
+    juce::ignoreUnused(buffer);
+    return;
+   #else
     if (auto* ready = impl->pending.exchange(nullptr, std::memory_order_acq_rel))
         impl->active.store(ready, std::memory_order_release);
     auto* model = impl->active.load(std::memory_order_acquire);
@@ -696,8 +709,11 @@ void ModelerEffect::process(juce::AudioBuffer<float>& buffer)
         model->channels[0]->process(input, output, samples);
         for (int channel = 0; channel < channels; ++channel) {
             auto* audio = buffer.getWritePointer(channel);
-            for (int sample = 0; sample < samples; ++sample)
-                audio[sample] += (output[sample] * outputGain - audio[sample]) * wet;
+            for (int sample = 0; sample < samples; ++sample) {
+                const auto processed = output[sample] * outputGain;
+                if (std::isfinite(processed))
+                    audio[sample] += (processed - audio[sample]) * wet;
+            }
         }
         return;
     }
@@ -707,10 +723,17 @@ void ModelerEffect::process(juce::AudioBuffer<float>& buffer)
         auto* input = impl->inputScratch[static_cast<size_t>(channel)].data();
         auto* output = impl->outputScratch[static_cast<size_t>(channel)].data();
         juce::FloatVectorOperations::copyWithMultiply(input, audio, inputGain, samples);
-        model->channels[static_cast<size_t>(channel)]->process(input, output, samples);
-        for (int sample = 0; sample < samples; ++sample)
-            audio[sample] += (output[sample] * outputGain - audio[sample]) * wet;
+        auto* channelModel = model->channels[static_cast<size_t>(channel)].get();
+        if (channelModel == nullptr)
+            channelModel = model->channels[0].get();
+        channelModel->process(input, output, samples);
+        for (int sample = 0; sample < samples; ++sample) {
+            const auto processed = output[sample] * outputGain;
+            if (std::isfinite(processed))
+            audio[sample] += (processed - audio[sample]) * wet;
+        }
     }
+   #endif
 }
 
 Ceres2Effect::Ceres2Effect(std::atomic<float>& rate, std::atomic<float>& depth,

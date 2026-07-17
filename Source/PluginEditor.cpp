@@ -1,5 +1,10 @@
 #include "PluginEditor.h"
 
+#if JUCE_IOS && JucePlugin_Build_Standalone
+ #include <juce_audio_utils/juce_audio_utils.h>
+ #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#endif
+
 namespace
 {
 #if JUCE_IOS
@@ -479,6 +484,13 @@ public:
                                               : editor.processor.getCabImpulseName(),
                                 juce::dontSendNotification);
             addAndMakeVisible(impulseName);
+           #if JUCE_IOS
+            if (modelerLoader) {
+                loadImpulse.setEnabled(false);
+                bypass.setEnabled(false);
+                impulseName.setText("UNAVAILABLE ON IOS", juce::dontSendNotification);
+            }
+           #endif
             loadImpulse.onClick = [this] {
                 chooser = std::make_unique<juce::FileChooser>(
                     modelerLoader ? "Load Neural Amp Model" : "Load cabinet impulse response",
@@ -581,7 +593,8 @@ public:
                        12, displayTop + displayHeight / 2, getWidth() - 24, 18,
                        juce::Justification::centred);
 
-            const auto railY = static_cast<float>(displayTop + displayHeight - 5);
+            const auto railY = static_cast<float>(
+                displayTop + displayHeight - (compact ? 12 : 24));
             const auto rail = juce::Rectangle<float>(12.0f, railY,
                 static_cast<float>(getWidth() - 24), compact ? 10.0f : 18.0f);
             const auto centre = rail.getCentreX();
@@ -646,7 +659,9 @@ public:
         const auto buttonWidth = juce::jmin(74, availableWidth / buttonCount);
         auto x = (getWidth() - (buttonCount * buttonWidth + (buttonCount - 1) * gap)) / 2;
         const auto buttonHeight = compact ? 26 : 38;
-        const auto buttonY = getHeight() - buttonHeight - (compact ? 8 : 24);
+        const auto footerPanelHeight = compact ? 34 : 56;
+        const auto footerTop = getHeight() - footerPanelHeight - 8;
+        const auto buttonY = footerTop + (footerPanelHeight - buttonHeight) / 2;
         bypass.setBounds(x, buttonY, buttonWidth, buttonHeight); x += buttonWidth + gap;
         if (hasOption) option.setBounds(x, buttonY, buttonWidth, buttonHeight), x += buttonWidth + gap;
         if (hasMore) more.setBounds(x, buttonY, buttonWidth, buttonHeight);
@@ -825,13 +840,72 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
     gridButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffffc77d));
     gridButton.onClick = [this] { showGridSelector(); };
     addAndMakeVisible(gridButton);
+    latencyLabel.setJustificationType(juce::Justification::centredRight);
+    latencyLabel.setColour(juce::Label::textColourId, juce::Colour(0xffaeb2bb));
+    latencyLabel.setFont(juce::FontOptions(12.0f));
+    latencyLabel.setText("LATENCY --", juce::dontSendNotification);
+    addAndMakeVisible(latencyLabel);
+   #if JUCE_IOS && JucePlugin_Build_Standalone
+    if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone) {
+        bufferButton.setButtonText("BUFFER");
+        bufferButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292d35));
+        bufferButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffbdefff));
+        bufferButton.onClick = [this] {
+            juce::PopupMenu menu;
+            constexpr std::array<int, 4> sizes { 128, 256, 512, 1024 };
+            auto currentSize = 0;
+            if (auto* holder = juce::StandalonePluginHolder::getInstance())
+                if (auto* device = holder->deviceManager.getCurrentAudioDevice())
+                    currentSize = device->getCurrentBufferSizeSamples();
+            for (const auto size : sizes)
+                menu.addItem(size, juce::String(size) + " samples", true, size == currentSize);
+            auto safeThis = juce::Component::SafePointer<StompForgeAudioProcessorEditor>(this);
+            menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&bufferButton),
+                [safeThis] (int selectedSize) {
+                    if (safeThis == nullptr || selectedSize <= 0) return;
+                    if (auto* holder = juce::StandalonePluginHolder::getInstance()) {
+                        auto setup = holder->deviceManager.getAudioDeviceSetup();
+                        setup.bufferSize = selectedSize;
+                        holder->deviceManager.setAudioDeviceSetup(setup, true);
+                    }
+                });
+        };
+        addAndMakeVisible(bufferButton);
+    }
+   #endif
     setResizable(true, true);
     setSize(1100, 760);
     updateResizeLimitsForGrid(true);
     startTimerHz(20);
 }
 
-StompForgeAudioProcessorEditor::~StompForgeAudioProcessorEditor() = default;
+StompForgeAudioProcessorEditor::~StompForgeAudioProcessorEditor()
+{
+    persistStandaloneStateIfChanged(true);
+}
+
+void StompForgeAudioProcessorEditor::persistStandaloneStateIfChanged(bool force)
+{
+   #if JUCE_IOS && JucePlugin_Build_Standalone
+    if (processor.wrapperType != juce::AudioProcessor::wrapperType_Standalone)
+        return;
+
+    juce::MemoryBlock state;
+    processor.getStateInformation(state);
+    const auto hash = state.toBase64Encoding().hashCode64();
+    if (!force && hash == lastPersistedStateHash)
+        return;
+
+    if (auto* holder = juce::StandalonePluginHolder::getInstance()) {
+        holder->savePluginState();
+        if (auto* properties = dynamic_cast<juce::PropertiesFile*>(holder->settings.get()))
+            properties->saveIfNeeded();
+        lastPersistedStateHash = hash;
+    }
+   #else
+    juce::ignoreUnused(force);
+   #endif
+}
 
 void StompForgeAudioProcessorEditor::showGridSelector()
 {
@@ -871,8 +945,9 @@ void StompForgeAudioProcessorEditor::showEffectMenu(int slot)
                  true, false, makeMenuIcon(MenuIcon::amp));
     amps.addItem(static_cast<int>(Id::amp5150) + 1, "VULCAN-5",
                  true, false, makeMenuIcon(MenuIcon::cab));
-    amps.addItem(static_cast<int>(Id::modeler) + 1, "MODELER",
-                 true, false, makeMenuIcon(MenuIcon::modeler));
+    amps.addItem(static_cast<int>(Id::modeler) + 1,
+                JUCE_IOS ? "MODELER (UNAVAILABLE ON IOS)" : "MODELER",
+                !JUCE_IOS, false, makeMenuIcon(MenuIcon::modeler));
     menu.addSubMenu("AMP", amps, true, makeMenuIcon(MenuIcon::amp));
     menu.addSubMenu("REVERB", item(Id::reverb, MenuIcon::reverb, "VOID CHAMBER"),
                     true, makeMenuIcon(MenuIcon::reverb));
@@ -914,6 +989,28 @@ void StompForgeAudioProcessorEditor::timerCallback()
 {
     inputFader->setSignalLevel(processor.consumeInputLevel());
     outputFader->setSignalLevel(processor.consumeOutputLevel());
+    if (++persistenceTimerTicks >= 5) {
+        persistenceTimerTicks = 0;
+        persistStandaloneStateIfChanged(false);
+    }
+    double latencyMilliseconds = 0.0;
+   #if JUCE_IOS && JucePlugin_Build_Standalone
+    if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone)
+        if (auto* holder = juce::StandalonePluginHolder::getInstance())
+            if (auto* device = holder->deviceManager.getCurrentAudioDevice()) {
+                bufferButton.setButtonText("BUF " + juce::String(device->getCurrentBufferSizeSamples()));
+                const auto latencySamples = device->getInputLatencyInSamples()
+                    + device->getOutputLatencyInSamples()
+                    + device->getCurrentBufferSizeSamples()
+                    + processor.getLatencySamples();
+                if (device->getCurrentSampleRate() > 0.0)
+                    latencyMilliseconds = 1000.0 * latencySamples / device->getCurrentSampleRate();
+            }
+   #endif
+    latencyLabel.setText(latencyMilliseconds > 0.0
+            ? "LATENCY " + juce::String(latencyMilliseconds, 1) + " ms"
+            : "LATENCY --",
+        juce::dontSendNotification);
     if (pedals[static_cast<size_t>(StompForgeAudioProcessor::PedalId::tuner)]->isVisible())
         pedals[static_cast<size_t>(StompForgeAudioProcessor::PedalId::tuner)]->repaint();
 }
@@ -1130,4 +1227,9 @@ void StompForgeAudioProcessorEditor::resized()
     outputFader->setBounds(outputArea.reduced(compact ? 1 : 4));
     gridButton.setBounds(getWidth() - (compact ? 72 : 96), compact ? 8 : 20,
                          compact ? 60 : 70, compact ? 28 : 34);
+    latencyLabel.setBounds(gridButton.getX() - (compact ? 124 : 150),
+                           compact ? 8 : 20, compact ? 116 : 140, compact ? 28 : 34);
+    if (bufferButton.isVisible())
+        bufferButton.setBounds(latencyLabel.getX() - (compact ? 82 : 104),
+                               compact ? 8 : 20, compact ? 76 : 96, compact ? 28 : 34);
 }

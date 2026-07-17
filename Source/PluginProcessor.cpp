@@ -45,7 +45,7 @@ StompForgeAudioProcessor::StompForgeAudioProcessor()
         *parameters.getRawParameterValue("modelerOutput"), *parameters.getRawParameterValue("modelerMix"),
         *parameters.getRawParameterValue("modelerBypass"));
     modeler = namPlayer.get(); effects[10] = std::move(namPlayer);
-    setPedalOrder({PedalId::gate, PedalId::ds1, PedalId::chorus, PedalId::jcm800,
+    setPedalOrder({PedalId::tuner, PedalId::gate, PedalId::ds1, PedalId::amp5150,
                    PedalId::reverb, PedalId::delay, PedalId::empty, PedalId::empty,
                    PedalId::empty, PedalId::empty, PedalId::empty, PedalId::empty}, true);
 }
@@ -124,10 +124,10 @@ StompForgeAudioProcessor::APVTS::ParameterLayout StompForgeAudioProcessor::creat
     p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"chorusBypass", 1}, "CERES-2 Bypass", false));
     addPercent("reverbSize", "VOID CHAMBER Size", 45.0f); addPercent("reverbDamping", "VOID CHAMBER Damping", 55.0f);
     addPercent("reverbMix", "VOID CHAMBER Mix", 24.0f);
-    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"reverbBypass", 1}, "VOID CHAMBER Bypass", false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"reverbBypass", 1}, "VOID CHAMBER Bypass", true));
     addPercent("delayTime", "PULSAR Time", 28.0f); addPercent("delayFeedback", "PULSAR Feedback", 32.0f);
     addPercent("delayMix", "PULSAR Mix", 22.0f);
-    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"delayBypass", 1}, "PULSAR Bypass", false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"delayBypass", 1}, "PULSAR Bypass", true));
     p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"tunerBypass", 1}, "LUNER Bypass", false));
     return {p.begin(), p.end()};
 }
@@ -222,7 +222,7 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
             if (!savedXml.contains("id=\"" + juce::String(id) + "\""))
                 if (auto* parameter = parameters.getParameter(id))
                     parameter->setValueNotifyingHost(parameter->getDefaultValue());
-        const auto text = parameters.state.getProperty("pedalOrder", "0,1,4,3,5,6").toString();
+        const auto text = parameters.state.getProperty("pedalOrder", "7,0,1,8,5,6").toString();
         juce::StringArray values; values.addTokens(text, ",", "");
         if (values.size() == 6 || values.size() == static_cast<int>(numSlots)) {
             std::array<PedalId, numSlots> restored{};
@@ -231,7 +231,7 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
                 restored[i] = static_cast<PedalId>(values[static_cast<int>(i)].getIntValue());
             setPedalOrder(restored, false);
         } else {
-            setPedalOrder({PedalId::gate, PedalId::ds1, PedalId::chorus, PedalId::jcm800,
+            setPedalOrder({PedalId::tuner, PedalId::gate, PedalId::ds1, PedalId::amp5150,
                            PedalId::reverb, PedalId::delay, PedalId::empty, PedalId::empty,
                            PedalId::empty, PedalId::empty, PedalId::empty, PedalId::empty}, false);
         }

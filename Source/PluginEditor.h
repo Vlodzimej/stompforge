@@ -22,17 +22,20 @@ private:
     std::array<std::unique_ptr<PedalCard>, StompForgeAudioProcessor::numEffects> pedals;
     std::array<std::unique_ptr<GridCell>, StompForgeAudioProcessor::numSlots> gridCells;
     std::unique_ptr<LevelFader> inputFader, outputFader;
-    juce::Label inputLabel, outputLabel;
-    juce::TextButton gridButton;
+    juce::Label inputLabel, outputLabel, latencyLabel;
+    juce::TextButton gridButton, bufferButton;
     std::unique_ptr<TouchMenuLookAndFeel> touchMenuLookAndFeel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<SliderAttachment> inputAttachment, outputAttachment;
+    juce::int64 lastPersistedStateHash = 0;
+    int persistenceTimerTicks = 0;
 
     void layoutPedals();
     void updateResizeLimitsForGrid(bool growIfNeeded);
     juce::Rectangle<int> getGridCellBounds(int slot) const;
     void showEffectMenu(int slot);
     void showGridSelector();
+    void persistStandaloneStateIfChanged(bool force);
     void timerCallback() override;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StompForgeAudioProcessorEditor)
 };
