@@ -644,12 +644,18 @@ public:
         for (size_t i = 0; i < knobs.size(); ++i) {
             auto row = controls.withHeight(controls.getHeight() / rows).translated(0, static_cast<int>(i / perRow) * controls.getHeight() / rows);
             auto cell = row.withWidth(cellWidth).translated(static_cast<int>(i % perRow) * cellWidth, 0);
-            labels[i]->setBounds(cell.removeFromTop(compact ? 13 : 20));
+            const auto labelHeight = compact ? 13 : 20;
+            const auto textBoxHeight = compact ? 12 : 18;
+            const auto sliderHeight = juce::jmin(cell.getHeight() - labelHeight,
+                                                 cell.getWidth() + textBoxHeight);
+            auto parameterGroup = cell.withSizeKeepingCentre(
+                cell.getWidth(), labelHeight + sliderHeight);
+            labels[i]->setBounds(parameterGroup.removeFromTop(labelHeight));
             labels[i]->setFont(juce::FontOptions(compact ? 8.0f : 12.0f));
             knobs[i]->setTextBoxStyle(juce::Slider::TextBoxBelow, false,
                                       compact ? juce::jmax(34, cell.getWidth() - 4) : 64,
-                                      compact ? 12 : 18);
-            knobs[i]->setBounds(cell.reduced(compact ? 0 : 1));
+                                      textBoxHeight);
+            knobs[i]->setBounds(parameterGroup.reduced(compact ? 0 : 1));
         }
         const auto hasOption = optionAttachment != nullptr || impulseLoader || modelerLoader;
         const auto hasMore = allIds.size() > 3;
