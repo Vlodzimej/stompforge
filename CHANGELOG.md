@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added MODELER to the Amp catalog, backed by NeuralAmpModelerCore. It loads
+  `.nam` files, resamples models to the host rate, keeps stereo channels
+  independent, and exposes Input, Output and Mix controls.
+- Fixed missing NAM architecture parsers in VST3 and Standalone release
+  binaries by retaining the parser registration translation units at link time.
 - Empty cells now open the effect menu on a short click as well as long-press.
   Signal routing traverses every intermediate empty-cell centre and selects
   left, right, top or bottom pedal ports according to the route direction.

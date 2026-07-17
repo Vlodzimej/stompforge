@@ -20,7 +20,7 @@ static bool valid(const char* name, const juce::AudioBuffer<float>& b)
     return std::isfinite(rms) && rms > 1.0e-6f && rms < 10.0f;
 }
 
-int main()
+int main(int argc, char* argv[])
 {
     juce::ScopedJuceInitialiser_GUI juce;
     juce::dsp::ProcessSpec spec { 48000.0, 4096, 2 };
@@ -44,6 +44,20 @@ int main()
     deltaIr.setSample(0, 0, 1.0f); deltaIr.setSample(1, 0, 1.0f);
     impulse.loadImpulse(std::move(deltaIr), 48000.0); impulse.prepare(spec);
     auto irSignal = makeSignal(); impulse.process(irSignal);
+    std::atomic<float> modelerInput{0}, modelerOutput{0}, modelerMix{100};
+    ModelerEffect modeler(modelerInput, modelerOutput, modelerMix, off); modeler.prepare(spec);
+    auto modelerSignal = makeSignal();
+    const auto modelerReference = makeSignal();
+    modeler.process(modelerSignal);
+    const auto unloadedModelerOk = modelerSignal.getMagnitude(0, modelerSignal.getNumSamples())
+        == modelerReference.getMagnitude(0, modelerReference.getNumSamples());
+    juce::String modelerError;
+    const auto modelPath = argc > 1 ? juce::File(argv[1]) : juce::File(NAM_TEST_MODEL_PATH);
+    const auto modelerLoaded = modeler.loadModel(modelPath, modelerError);
+    auto loadedModelerSignal = makeSignal();
+    if (modelerLoaded) modeler.process(loadedModelerSignal);
+    const auto loadedModelerOk = modelerLoaded && valid("MODELER loaded model", loadedModelerSignal);
+    if (!modelerLoaded) std::cout << "MODELER load failed: " << modelerError << '\n';
     auto chain = makeSignal();
     ds1.reset(); amp.reset(); ds1.process(chain); amp.process(chain);
 
@@ -138,6 +152,7 @@ int main()
     std::cout << "first silent block=" << firstSilentBlock << " last RMS=" << lastBlockRms << '\n';
     return valid("DEIMOS-1", a) && valid("MARS-8", b) && valid("VULCAN-5", c)
         && valid("IMPULSE delta IR", irSignal)
+        && unloadedModelerOk && loadedModelerOk
         && valid("DEIMOS-1 -> MARS-8", chain)
         && valid("six-module chain", sixModuleChain) && tunerOk && quietLinearityOk && shortBlocksOk ? 0 : 1;
 }

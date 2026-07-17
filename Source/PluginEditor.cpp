@@ -213,9 +213,9 @@ public:
               std::initializer_list<const char*> parameterIds,
               std::initializer_list<const char*> parameterNames,
               const char* bypassId, const char* optionId = nullptr, bool showTuner = false,
-              bool showImpulseLoader = false)
+              bool showImpulseLoader = false, bool showModelerLoader = false)
         : editor(owner), id(pedalId), name(std::move(pedalName)), colour(pedalColour),
-          tunerDisplay(showTuner), impulseLoader(showImpulseLoader)
+          tunerDisplay(showTuner), impulseLoader(showImpulseLoader), modelerLoader(showModelerLoader)
     {
         for (auto* value : parameterIds) allIds.emplace_back(value);
         for (auto* value : parameterNames) allNames.emplace_back(value);
@@ -287,25 +287,40 @@ public:
                 optionAttachment->sendInitialUpdate();
             }
         }
-        if (impulseLoader) {
-            loadImpulse.setButtonText("LOAD IR");
+        if (impulseLoader || modelerLoader) {
+            loadImpulse.setButtonText(modelerLoader ? "LOAD NAM" : "LOAD IR");
             loadImpulse.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff243c48));
             loadImpulse.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffbde9ff));
             addAndMakeVisible(loadImpulse); loadImpulse.addMouseListener(this, false);
             impulseName.setJustificationType(juce::Justification::centred);
             impulseName.setColour(juce::Label::textColourId, juce::Colour(0xffbde9ff));
             impulseName.setFont(juce::FontOptions(11.0f));
-            impulseName.setText(editor.processor.getCabImpulseName(), juce::dontSendNotification);
+            impulseName.setText(modelerLoader ? editor.processor.getModelerName()
+                                              : editor.processor.getCabImpulseName(),
+                                juce::dontSendNotification);
             addAndMakeVisible(impulseName);
             loadImpulse.onClick = [this] {
-                chooser = std::make_unique<juce::FileChooser>("Load cabinet impulse response", juce::File{}, "*.wav;*.aif;*.aiff");
+                chooser = std::make_unique<juce::FileChooser>(
+                    modelerLoader ? "Load Neural Amp Model" : "Load cabinet impulse response",
+                    juce::File{}, modelerLoader ? "*.nam" : "*.wav;*.aif;*.aiff");
                 auto safeThis = juce::Component::SafePointer<PedalCard>(this);
                 chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                     [safeThis] (const juce::FileChooser& selected) {
                         if (safeThis == nullptr) return;
                         const auto file = selected.getResult();
-                        if (file.existsAsFile() && safeThis->editor.processor.loadCabImpulse(file))
-                            safeThis->impulseName.setText(safeThis->editor.processor.getCabImpulseName(), juce::dontSendNotification);
+                        if (!file.existsAsFile()) return;
+                        if (safeThis->modelerLoader) {
+                            juce::String error;
+                            if (safeThis->editor.processor.loadModelerModel(file, error))
+                                safeThis->impulseName.setText(safeThis->editor.processor.getModelerName(),
+                                                              juce::dontSendNotification);
+                            else
+                                juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                                    "Unable to load NAM model", error);
+                        } else if (safeThis->editor.processor.loadCabImpulse(file)) {
+                            safeThis->impulseName.setText(safeThis->editor.processor.getCabImpulseName(),
+                                                          juce::dontSendNotification);
+                        }
                     });
             };
         }
@@ -411,7 +426,8 @@ public:
 
     void resized() override
     {
-        auto controls = getLocalBounds().reduced(10).withTrimmedTop(impulseLoader ? 68 : 48).withTrimmedBottom(76);
+        auto controls = getLocalBounds().reduced(10).withTrimmedTop(
+            (impulseLoader || modelerLoader) ? 68 : 48).withTrimmedBottom(76);
         const auto rows = knobs.size() > 3 ? 2 : 1;
         const auto perRow = static_cast<int>((knobs.size() + rows - 1) / rows);
         const auto cellWidth = perRow > 0 ? controls.getWidth() / perRow : 0;
@@ -421,7 +437,7 @@ public:
             labels[i]->setBounds(cell.removeFromTop(20));
             knobs[i]->setBounds(cell.reduced(1));
         }
-        const auto hasOption = optionAttachment != nullptr || impulseLoader;
+        const auto hasOption = optionAttachment != nullptr || impulseLoader || modelerLoader;
         const auto hasMore = allIds.size() > 3;
         const auto buttonCount = 1 + static_cast<int>(hasOption) + static_cast<int>(hasMore);
         const auto buttonWidth = 74, gap = 8;
@@ -429,7 +445,7 @@ public:
         bypass.setBounds(x, getHeight() - 62, buttonWidth, 38); x += buttonWidth + gap;
         if (hasOption) option.setBounds(x, getHeight() - 62, buttonWidth, 38), x += buttonWidth + gap;
         if (hasMore) more.setBounds(x, getHeight() - 62, buttonWidth, 38);
-        if (impulseLoader) {
+        if (impulseLoader || modelerLoader) {
             option.setVisible(false);
             loadImpulse.setBounds(option.getBounds());
             impulseName.setBounds(16, 48, getWidth() - 32, 18);
@@ -477,6 +493,7 @@ private:
     bool dragOver = false;
     bool tunerDisplay = false;
     bool impulseLoader = false;
+    bool modelerLoader = false;
 };
 
 class StompForgeAudioProcessorEditor::GridCell final : public juce::Component,
@@ -575,6 +592,11 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
         std::initializer_list<const char*>{"irLevel", "irMix", "irLowCut", "irHighCut"},
         std::initializer_list<const char*>{"LEVEL", "MIX", "LOW CUT", "HIGH CUT"},
         "irBypass", nullptr, false, true);
+    pedals[10] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::modeler,
+        "MODELER", juce::Colour(0xff4b326b),
+        std::initializer_list<const char*>{"modelerInput", "modelerOutput", "modelerMix"},
+        std::initializer_list<const char*>{"INPUT", "OUTPUT", "MIX"},
+        "modelerBypass", nullptr, false, false, true);
     for (auto& cell : gridCells) { cell = std::make_unique<GridCell>(*this); addAndMakeVisible(*cell); }
     for (auto& pedal : pedals) addAndMakeVisible(*pedal);
 
@@ -639,6 +661,7 @@ void StompForgeAudioProcessorEditor::showEffectMenu(int slot)
     juce::PopupMenu amps;
     amps.addItem(static_cast<int>(Id::jcm800) + 1, "MARS-8");
     amps.addItem(static_cast<int>(Id::amp5150) + 1, "VULCAN-5");
+    amps.addItem(static_cast<int>(Id::modeler) + 1, "MODELER");
     menu.addSubMenu("Amp", amps);
     menu.addSubMenu("Reverb", item(Id::reverb, "VOID CHAMBER"));
     menu.addSubMenu("Delay", item(Id::delay, "PULSAR"));

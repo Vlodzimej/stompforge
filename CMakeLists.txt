@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 project(StompForge VERSION 0.0.1 LANGUAGES C CXX)
+if (POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+endif()
 
 set(ASIO_SDK_PATH "" CACHE PATH "Path to the Steinberg ASIO SDK containing common/iasiodrv.h")
 
@@ -12,6 +15,44 @@ FetchContent_Declare(JUCE
     GIT_TAG 8.0.10
     GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(JUCE)
+
+# NeuralAmpModelerPlugin is an iPlug2 application, so StompForge uses it as the
+# integration reference and links only the framework-independent MIT core.
+FetchContent_Declare(NAMCoreBundled
+    GIT_REPOSITORY https://github.com/sdatkinson/NeuralAmpModelerCore.git
+    GIT_TAG v0.5.4
+    GIT_SHALLOW TRUE
+    GIT_SUBMODULES Dependencies/eigen Dependencies/AudioDSPTools)
+FetchContent_GetProperties(NAMCoreBundled)
+if (NOT namcorebundled_POPULATED)
+    FetchContent_Populate(NAMCoreBundled)
+endif()
+
+# An object library is intentional: NAM architecture parsers self-register via
+# translation-unit statics, which a conventional static linker may discard.
+add_library(StompForgeNAMCore OBJECT
+    ${namcorebundled_SOURCE_DIR}/NAM/activations.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/container.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/conv1d.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/convnet.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/dsp.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/get_dsp.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/linear.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/lstm.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/ring_buffer.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/util.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/wavenet/a2_fast.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/wavenet/model.cpp
+    ${namcorebundled_SOURCE_DIR}/NAM/wavenet/slimmable.cpp)
+target_include_directories(StompForgeNAMCore SYSTEM PUBLIC
+    ${namcorebundled_SOURCE_DIR}
+    ${namcorebundled_SOURCE_DIR}/NAM
+    ${namcorebundled_SOURCE_DIR}/Dependencies/nlohmann
+    ${namcorebundled_SOURCE_DIR}/Dependencies/eigen
+    ${namcorebundled_SOURCE_DIR}/Dependencies/AudioDSPTools)
+target_compile_definitions(StompForgeNAMCore PUBLIC NAM_SAMPLE_FLOAT=1 NAM_ENABLE_A2_FAST=1 NOMINMAX)
+target_compile_features(StompForgeNAMCore PUBLIC cxx_std_20)
+set_target_properties(StompForgeNAMCore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 juce_add_plugin(StompForge
     COMPANY_NAME "Vlodzimej Garlic"
@@ -57,17 +98,33 @@ else()
 endif()
 
 target_link_libraries(StompForge PRIVATE
+    StompForgeNAMCore
     juce::juce_audio_utils
     juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags
            juce::juce_recommended_lto_flags
            juce::juce_recommended_warning_flags)
 
+# NAM model architectures register themselves from static initialisers. The
+# JUCE shared-code target is itself a static archive, so format linkers must
+# retain every object from it or parser-only translation units disappear.
+foreach(format_target StompForge_VST3 StompForge_Standalone)
+    if (MSVC)
+        target_link_options(${format_target} PRIVATE "/WHOLEARCHIVE:$<TARGET_FILE:StompForge>")
+    elseif(APPLE)
+        target_link_options(${format_target} PRIVATE "SHELL:-Wl,-force_load,$<TARGET_FILE:StompForge>")
+    else()
+        target_link_options(${format_target} PRIVATE
+            "SHELL:-Wl,--whole-archive $<TARGET_FILE:StompForge> -Wl,--no-whole-archive")
+    endif()
+endforeach()
+
 option(STOMPFORGE_BUILD_TESTS "Build offline DSP smoke tests" ON)
 if (STOMPFORGE_BUILD_TESTS)
     add_executable(StompForgeDspSmokeTest Tests/DspSmokeTest.cpp Source/Effects.cpp Source/Effects.h)
     target_include_directories(StompForgeDspSmokeTest PRIVATE Source)
-    target_compile_definitions(StompForgeDspSmokeTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    target_link_libraries(StompForgeDspSmokeTest PRIVATE juce::juce_audio_utils juce::juce_dsp
+    target_compile_definitions(StompForgeDspSmokeTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+        NAM_TEST_MODEL_PATH="${namcorebundled_SOURCE_DIR}/example_models/A2.nam")
+    target_link_libraries(StompForgeDspSmokeTest PRIVATE StompForgeNAMCore juce::juce_audio_utils juce::juce_dsp
         juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 endif()

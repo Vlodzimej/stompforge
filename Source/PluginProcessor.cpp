@@ -40,6 +40,10 @@ StompForgeAudioProcessor::StompForgeAudioProcessor()
         *parameters.getRawParameterValue("irLowCut"), *parameters.getRawParameterValue("irHighCut"),
         *parameters.getRawParameterValue("irMix"), *parameters.getRawParameterValue("irBypass"));
     impulseCab = cabPlayer.get(); effects[9] = std::move(cabPlayer);
+    auto namPlayer = std::make_unique<ModelerEffect>(*parameters.getRawParameterValue("modelerInput"),
+        *parameters.getRawParameterValue("modelerOutput"), *parameters.getRawParameterValue("modelerMix"),
+        *parameters.getRawParameterValue("modelerBypass"));
+    modeler = namPlayer.get(); effects[10] = std::move(namPlayer);
     setPedalOrder({PedalId::gate, PedalId::ds1, PedalId::chorus, PedalId::jcm800,
                    PedalId::reverb, PedalId::delay, PedalId::empty, PedalId::empty,
                    PedalId::empty, PedalId::empty, PedalId::empty, PedalId::empty}, true);
@@ -104,6 +108,13 @@ StompForgeAudioProcessor::APVTS::ParameterLayout StompForgeAudioProcessor::creat
     p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"irMix", 1}, "IMPULSE Mix",
         juce::NormalisableRange<float>{0.0f, 100.0f, 0.1f}, 100.0f));
     p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"irBypass", 1}, "IMPULSE Bypass", false));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"modelerInput", 1}, "MODELER Input",
+        juce::NormalisableRange<float>{-24.0f, 24.0f, 0.1f}, 0.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"modelerOutput", 1}, "MODELER Output",
+        juce::NormalisableRange<float>{-24.0f, 12.0f, 0.1f}, 0.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"modelerMix", 1}, "MODELER Mix",
+        juce::NormalisableRange<float>{0.0f, 100.0f, 0.1f}, 100.0f));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"modelerBypass", 1}, "MODELER Bypass", false));
     auto addPercent = [&p] (const char* id, const char* name, float initial) {
         p.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{id, 1}, name,
             juce::NormalisableRange<float>{0.0f, 100.0f, 0.1f}, initial)); };
@@ -194,7 +205,7 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
         // missing APVTS children as zero, which makes Level or Master mute the
         // module. Restore only genuinely absent parameters to their declared
         // defaults; explicit user zero values remain untouched.
-        constexpr std::array<const char*, 44> addedParameters {
+        constexpr std::array<const char*, 48> addedParameters {
             "ds1Dist", "ds1Tone", "ds1Level", "ds1Bypass",
             "jcmPreamp", "jcmBass", "jcmMiddle", "jcmTreble", "jcmMaster",
             "jcmPresence", "jcmSag", "jcmCab", "jcmBypass",
@@ -203,7 +214,8 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
             "delayTime", "delayFeedback", "delayMix", "delayBypass", "tunerBypass", "input",
             "5150Channel", "5150Gain", "5150Bass", "5150Middle", "5150Treble", "5150Master",
             "5150Presence", "5150Resonance", "5150Bias", "5150Sag", "5150Cab", "5150Bypass",
-            "irLevel", "irLowCut", "irHighCut", "irMix", "irBypass" };
+            "irLevel", "irLowCut", "irHighCut", "irMix", "irBypass",
+            "modelerInput", "modelerOutput", "modelerMix", "modelerBypass" };
         for (const auto* id : addedParameters)
             if (!savedXml.contains("id=\"" + juce::String(id) + "\""))
                 if (auto* parameter = parameters.getParameter(id))
@@ -225,6 +237,11 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
         const auto cached = juce::File(parameters.state.getProperty("irCachedPath").toString());
         if (original.existsAsFile()) loadCabImpulse(original);
         else if (cached.existsAsFile() && impulseCab != nullptr) impulseCab->loadImpulse(cached);
+        const auto modelPath = juce::File(parameters.state.getProperty("modelerPath").toString());
+        if (modelPath.existsAsFile()) {
+            juce::String ignoredError;
+            loadModelerModel(modelPath, ignoredError);
+        }
     }
 }
 
@@ -250,6 +267,20 @@ bool StompForgeAudioProcessor::loadCabImpulse(const juce::File& source)
 juce::String StompForgeAudioProcessor::getCabImpulseName() const
 {
     return parameters.state.getProperty("irDisplayName", "NO IR LOADED").toString();
+}
+
+bool StompForgeAudioProcessor::loadModelerModel(const juce::File& source, juce::String& error)
+{
+    if (modeler == nullptr || !modeler->loadModel(source, error)) return false;
+    parameters.state.setProperty("modelerPath", source.getFullPathName(), nullptr);
+    parameters.state.setProperty("modelerDisplayName", source.getFileNameWithoutExtension(), nullptr);
+    return true;
+}
+
+juce::String StompForgeAudioProcessor::getModelerName() const
+{
+    return parameters.state.getProperty("modelerDisplayName",
+        modeler != nullptr ? modeler->getModelName() : juce::String("NO MODEL LOADED")).toString();
 }
 
 int StompForgeAudioProcessor::getGridRows() const noexcept

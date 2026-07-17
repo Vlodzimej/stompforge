@@ -1,5 +1,11 @@
 #include "Effects.h"
 
+#include <NAM/get_dsp.h>
+namespace iplug { inline constexpr double PI = 3.14159265358979323846; }
+#define DEFAULT_BLOCK_SIZE 512
+#include <dsp/ResamplingContainer/ResamplingContainer.h>
+#undef DEFAULT_BLOCK_SIZE
+
 StargateEffect::StargateEffect(std::atomic<float>& t, std::atomic<float>& b) : threshold(t), bypass(b) {}
 
 void StargateEffect::prepare(const juce::dsp::ProcessSpec& spec)
@@ -547,6 +553,149 @@ void ImpulseCabEffect::process(juce::AudioBuffer<float>& buffer)
             const auto dry = dryBuffer.getSample(ch, i);
             buffer.setSample(ch, i, dry + (buffer.getSample(ch, i) * level - dry) * wet);
         }
+}
+
+namespace
+{
+double modelSampleRate(const nam::DSP& model)
+{
+    const auto reported = model.GetExpectedSampleRate();
+    return reported > 0.0 ? reported : 48000.0;
+}
+
+class ResampledNamModel
+{
+public:
+    ResampledNamModel(std::unique_ptr<nam::DSP> source, double hostRate, int maximumBlockSize)
+        : model(std::move(source)), resampler(modelSampleRate(*model))
+    {
+        processFunction = [this] (float** input, float** output, int frames) {
+            model->process(input, output, frames);
+        };
+        reset(hostRate, maximumBlockSize);
+    }
+
+    void reset(double hostRate, int maximumBlockSize)
+    {
+        hostSampleRate = hostRate;
+        const auto ratio = hostRate / modelSampleRate(*model);
+        const auto modelBlockSize = juce::jmax(1, static_cast<int>(std::ceil(maximumBlockSize / ratio)));
+        model->Reset(modelSampleRate(*model), modelBlockSize);
+        resampler.Reset(hostRate, maximumBlockSize);
+    }
+
+    void process(float* input, float* output, int frames)
+    {
+        float* inputs[] { input };
+        float* outputs[] { output };
+        if (modelSampleRate(*model) == hostSampleRate)
+            model->process(inputs, outputs, frames);
+        else
+            resampler.ProcessBlock(inputs, outputs, frames, processFunction);
+    }
+
+private:
+    std::unique_ptr<nam::DSP> model;
+    dsp::ResamplingContainer<float, 1, 12> resampler;
+    std::function<void(float**, float**, int)> processFunction;
+    double hostSampleRate = 0.0;
+};
+}
+
+struct ModelerEffect::Impl
+{
+    struct StereoModel
+    {
+        std::array<std::unique_ptr<ResampledNamModel>, 2> channels;
+        juce::String name;
+    };
+
+    std::vector<std::unique_ptr<StereoModel>> models;
+    std::atomic<StereoModel*> active { nullptr };
+    std::atomic<StereoModel*> pending { nullptr };
+    std::array<std::vector<float>, 2> inputScratch, outputScratch;
+    double sampleRate = 48000.0;
+    int maximumBlockSize = 512;
+};
+
+ModelerEffect::ModelerEffect(std::atomic<float>& input, std::atomic<float>& output,
+    std::atomic<float>& mix, std::atomic<float>& bypass)
+    : impl(std::make_unique<Impl>()), inputParam(input), outputParam(output),
+      mixParam(mix), bypassParam(bypass) {}
+
+ModelerEffect::~ModelerEffect() = default;
+
+void ModelerEffect::prepare(const juce::dsp::ProcessSpec& spec)
+{
+    impl->sampleRate = spec.sampleRate;
+    impl->maximumBlockSize = static_cast<int>(spec.maximumBlockSize);
+    for (auto& buffer : impl->inputScratch) buffer.resize(spec.maximumBlockSize);
+    for (auto& buffer : impl->outputScratch) buffer.resize(spec.maximumBlockSize);
+    for (auto& stereo : impl->models)
+        for (auto& channel : stereo->channels) {
+            channel->reset(spec.sampleRate, impl->maximumBlockSize);
+        }
+}
+
+void ModelerEffect::reset()
+{
+    if (auto* model = impl->active.load(std::memory_order_acquire))
+        for (auto& channel : model->channels)
+            channel->reset(impl->sampleRate, impl->maximumBlockSize);
+}
+
+bool ModelerEffect::loadModel(const juce::File& file, juce::String& error)
+{
+    if (!file.existsAsFile()) { error = "The selected NAM model does not exist."; return false; }
+    try {
+        const auto path = std::filesystem::u8path(file.getFullPathName().toStdString());
+        auto stereo = std::make_unique<Impl::StereoModel>();
+        for (auto& channel : stereo->channels) {
+            auto model = nam::get_dsp(path, nam::DspLoadOptions { false });
+            if (model->NumInputChannels() != 1 || model->NumOutputChannels() != 1)
+                throw std::runtime_error("MODELER supports mono-input, mono-output NAM files.");
+            channel = std::make_unique<ResampledNamModel>(std::move(model), impl->sampleRate,
+                                                          impl->maximumBlockSize);
+        }
+        stereo->name = file.getFileNameWithoutExtension();
+        auto* ready = stereo.get();
+        impl->models.push_back(std::move(stereo));
+        impl->pending.store(ready, std::memory_order_release);
+        return true;
+    } catch (const std::exception& exception) {
+        error = exception.what();
+        return false;
+    }
+}
+
+juce::String ModelerEffect::getModelName() const
+{
+    if (auto* pending = impl->pending.load(std::memory_order_acquire)) return pending->name;
+    if (auto* active = impl->active.load(std::memory_order_acquire)) return active->name;
+    return "NO NAM LOADED";
+}
+
+void ModelerEffect::process(juce::AudioBuffer<float>& buffer)
+{
+    if (auto* ready = impl->pending.exchange(nullptr, std::memory_order_acq_rel))
+        impl->active.store(ready, std::memory_order_release);
+    auto* model = impl->active.load(std::memory_order_acquire);
+    if (model == nullptr || bypassParam.load() >= 0.5f) return;
+
+    const auto samples = juce::jmin(buffer.getNumSamples(), impl->maximumBlockSize);
+    const auto channels = juce::jmin(buffer.getNumChannels(), 2);
+    const auto inputGain = juce::Decibels::decibelsToGain(inputParam.load());
+    const auto outputGain = juce::Decibels::decibelsToGain(outputParam.load());
+    const auto wet = juce::jlimit(0.0f, 1.0f, mixParam.load() * 0.01f);
+    for (int channel = 0; channel < channels; ++channel) {
+        auto* audio = buffer.getWritePointer(channel);
+        auto* input = impl->inputScratch[static_cast<size_t>(channel)].data();
+        auto* output = impl->outputScratch[static_cast<size_t>(channel)].data();
+        juce::FloatVectorOperations::copyWithMultiply(input, audio, inputGain, samples);
+        model->channels[static_cast<size_t>(channel)]->process(input, output, samples);
+        for (int sample = 0; sample < samples; ++sample)
+            audio[sample] += (output[sample] * outputGain - audio[sample]) * wet;
+    }
 }
 
 Ceres2Effect::Ceres2Effect(std::atomic<float>& rate, std::atomic<float>& depth,

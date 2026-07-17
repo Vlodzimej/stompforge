@@ -163,6 +163,27 @@ private:
     static float triode(float x, float bias, float hardness) noexcept;
 };
 
+class ModelerEffect final : public EffectModule
+{
+public:
+    ModelerEffect(std::atomic<float>& input, std::atomic<float>& output,
+                  std::atomic<float>& mix, std::atomic<float>& bypass);
+    ~ModelerEffect() override;
+    void prepare(const juce::dsp::ProcessSpec&) override;
+    void reset() override;
+    void process(juce::AudioBuffer<float>&) override;
+    bool loadModel(const juce::File&, juce::String& error);
+    juce::String getModelName() const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl;
+    std::atomic<float>& inputParam;
+    std::atomic<float>& outputParam;
+    std::atomic<float>& mixParam;
+    std::atomic<float>& bypassParam;
+};
+
 class ImpulseCabEffect final : public EffectModule
 {
 public:

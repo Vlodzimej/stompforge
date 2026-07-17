@@ -1,5 +1,12 @@
 # StompForge
 
+## MODELER
+
+The Amp catalog includes MODELER, powered by NeuralAmpModelerCore. Use
+`LOAD NAM` to select a `.nam` file. Models are resampled to the host sample
+rate and stereo channels use independent model instances. The card exposes
+Input, Output and Mix controls.
+
 Версия: **0.0.1**. Автор: **Vlodzimej Garlic**.
 
 Кроссплатформенный гитарный эффект VST3/Standalone на JUCE 8. Виртуальный

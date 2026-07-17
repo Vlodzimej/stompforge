@@ -34,9 +34,9 @@ public:
     APVTS parameters;
     static APVTS::ParameterLayout createParameterLayout();
 
-    enum class PedalId : int { gate = 0, ds1, tone, jcm800, chorus, reverb, delay, tuner, amp5150, impulseCab, empty = 15 };
+    enum class PedalId : int { gate = 0, ds1, tone, jcm800, chorus, reverb, delay, tuner, amp5150, impulseCab, modeler, empty = 15 };
     static constexpr size_t numSlots = 12;
-    static constexpr size_t numEffects = 10;
+    static constexpr size_t numEffects = 11;
     struct TunerState { int midiNote = -1; float cents = 0.0f; float frequency = 0.0f; float confidence = 0.0f; };
     TunerState getTunerState() const noexcept;
     std::array<PedalId, numSlots> getPedalOrder() const noexcept;
@@ -45,6 +45,8 @@ public:
     void clearPedal(int slot);
     bool loadCabImpulse(const juce::File& source);
     juce::String getCabImpulseName() const;
+    bool loadModelerModel(const juce::File& source, juce::String& error);
+    juce::String getModelerName() const;
     int getGridRows() const noexcept;
     int getGridColumns() const noexcept;
     bool setGridSize(int rows, int columns);
@@ -57,6 +59,7 @@ private:
     std::atomic<bool> impulseActive { false };
     LunerEffect* luner = nullptr;
     ImpulseCabEffect* impulseCab = nullptr;
+    ModelerEffect* modeler = nullptr;
     std::atomic<juce::uint64> packedOrder { 0u };
     juce::LinearSmoothedValue<float> inputGain, outputGain;
     std::atomic<float> inputLevel { 0.0f }, outputLevel { 0.0f };
