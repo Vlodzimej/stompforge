@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "AssetRepository.h"
 
 StompForgeAudioProcessor::StompForgeAudioProcessor()
     : AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
@@ -248,15 +249,9 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
 bool StompForgeAudioProcessor::loadCabImpulse(const juce::File& source)
 {
     if (impulseCab == nullptr || !source.existsAsFile()) return false;
-    auto cache = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("StompForge").getChildFile("ImpulseResponses");
-    if (cache.createDirectory().failed()) return false;
-    const auto safeName = source.getFileNameWithoutExtension().retainCharacters("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_ ");
-    const auto cached = cache.getChildFile(safeName + "-" + juce::String(source.getSize()) + source.getFileExtension());
-    if (source != cached) {
-        cached.deleteFile();
-        if (!source.copyFileTo(cached)) return false;
-    }
+    juce::String error;
+    const auto cached = stompforge::AssetRepository::importFile(source, "ImpulseResponses", error);
+    if (!cached.existsAsFile()) return false;
     impulseCab->loadImpulse(cached);
     parameters.state.setProperty("irOriginalPath", source.getFullPathName(), nullptr);
     parameters.state.setProperty("irCachedPath", cached.getFullPathName(), nullptr);
@@ -271,8 +266,15 @@ juce::String StompForgeAudioProcessor::getCabImpulseName() const
 
 bool StompForgeAudioProcessor::loadModelerModel(const juce::File& source, juce::String& error)
 {
-    if (modeler == nullptr || !modeler->loadModel(source, error)) return false;
-    parameters.state.setProperty("modelerPath", source.getFullPathName(), nullptr);
+    if (modeler == nullptr) return false;
+    const auto cached = stompforge::AssetRepository::importFile(source, "NAMModels", error);
+    if (!cached.existsAsFile()) return false;
+    if (!modeler->loadModel(cached, error)) {
+        if (cached != source) cached.deleteFile();
+        return false;
+    }
+    parameters.state.setProperty("modelerOriginalPath", source.getFullPathName(), nullptr);
+    parameters.state.setProperty("modelerPath", cached.getFullPathName(), nullptr);
     parameters.state.setProperty("modelerDisplayName", source.getFileNameWithoutExtension(), nullptr);
     return true;
 }

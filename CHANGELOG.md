@@ -5,7 +5,14 @@ Keep a Changelog; версия продукта следует Semantic Versioni
 
 ## [Unreleased]
 
-Пока нет изменений.
+### Добавлено
+
+- CMake-конфигурация iOS/iPadOS для Standalone-приложения и встроенного
+  AUv3-расширения.
+- App Group storage для общих NAM-моделей и cabinet IR между приложением и
+  AUv3; на остальных платформах используется управляемый каталог StompForge.
+- Инструкция Apple mobile build с параметрами подписи и отдельными release
+  gates.
 
 ## [0.0.1-alpha] — 2026-07-17
 
