@@ -1,5 +1,6 @@
 #define AppName "StompForge"
 #define AppVersion "0.0.1"
+#define AppChannel "alpha"
 #define AppPublisher "Vlodzimej Garlic"
 #define BuildRoot "..\build\StompForge_artefacts\Release"
 
@@ -7,7 +8,7 @@
 AppId={{38C13A90-8E4D-45C7-9592-7FA70B38379B}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppVerName={#AppName} {#AppVersion}
+AppVerName={#AppName} {#AppVersion} {#AppChannel}
 AppPublisher={#AppPublisher}
 VersionInfoVersion={#AppVersion}.0
 VersionInfoCompany={#AppPublisher}
@@ -18,7 +19,7 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 UninstallDisplayName={#AppName} {#AppVersion}
 OutputDir=..\dist
-OutputBaseFilename=StompForge-{#AppVersion}-Windows-x64-Setup
+OutputBaseFilename=StompForge-{#AppVersion}-{#AppChannel}-Windows-x64-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -42,6 +43,8 @@ Name: "standalone"; Description: "Standalone application"; Types: full custom
 [Files]
 Source: "{#BuildRoot}\VST3\StompForge.vst3\*"; DestDir: "{commoncf64}\VST3\StompForge.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#BuildRoot}\Standalone\StompForge.exe"; DestDir: "{app}"; Components: standalone; Flags: ignoreversion
+Source: "..\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\StompForge"; Filename: "{app}\StompForge.exe"; Components: standalone

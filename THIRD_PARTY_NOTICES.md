@@ -43,3 +43,22 @@ Project sources:
 Eigen is distributed primarily under the Mozilla Public License 2.0. Its
 license files and source are available at the project URL above and in the
 pinned NeuralAmpModelerCore dependency fetched by CMake.
+
+JUCE 8.0.10 is dual-licensed under AGPLv3 and the commercial JUCE 8 licence.
+StompForge 0.0.1-alpha uses JUCE under the AGPLv3 open-source route:
+
+- https://github.com/juce-framework/JUCE/blob/8.0.10/LICENSE.md
+- https://juce.com/legal/juce-8-licence/
+
+JUCE includes third-party components under their respective licences, including
+the MIT-licensed VST3 SDK. The authoritative dependency list is in the JUCE
+license file linked above.
+
+When StompForge Standalone is built with `ASIO_SDK_PATH`, Steinberg ASIO SDK
+code is compiled into the product. That SDK is offered under the proprietary
+Steinberg ASIO licence or GPLv3; distribution must comply with the selected
+route. ASIO is disabled when `ASIO_SDK_PATH` is not supplied.
+
+AudioDSPTools' Lanczos resampler contains an adapted component whose source
+header preserves the iPlug2 and sst-basic-blocks attribution and licence
+notices. Those notices remain present in the fetched pinned source.

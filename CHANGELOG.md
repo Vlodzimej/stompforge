@@ -1,65 +1,47 @@
 # Changelog
 
-## Unreleased
+Все заметные изменения StompForge фиксируются в этом файле. Формат основан на
+Keep a Changelog; версия продукта следует Semantic Versioning.
 
-- Added MODELER to the Amp catalog, backed by NeuralAmpModelerCore. It loads
-  `.nam` files, resamples models to the host rate, keeps stereo channels
-  independent, and exposes Input, Output and Mix controls.
-- Fixed missing NAM architecture parsers in VST3 and Standalone release
-  binaries by retaining the parser registration translation units at link time.
-- Empty cells now open the effect menu on a short click as well as long-press.
-  Signal routing traverses every intermediate empty-cell centre and selects
-  left, right, top or bottom pedal ports according to the route direction.
-- Added Clear current cell to the long-press menu, allowed grid sizes down to
-  1x1, improved the matrix preview, and replaced knob-to-knob signal lines with
-  rounded orthogonal Bezier cable routing between pedal input/output ports.
-- Added persistent empty pedalboard slots with drop targets, long-press effect
-  insertion, and a directional signal cable from the right-side input through
-  active effects to the left-side output. Legacy six-slot sessions migrate to
-  the new twelve-position representation.
-- Reworked the pedalboard layout to flow from the bottom-right input to the
-  top-left output, swapped the global Input/Output controls, and added a saved
-  visual grid selector supporting matrices up to 4 columns by 3 rows.
-- Added the IMPULSE cabinet IR player in the new Cabs category, with WAV/AIFF
-  loading, managed fallback cache, session restore, Level, Low/High Cut and Mix.
-- Added the VULCAN-5 amp: Clean/Crunch/Lead relay voicings, 12AX7 stages,
-  cold-biased 6L6GC output, Presence, Resonance, supply sag and 4x12 cabsim.
+## [Unreleased]
 
-Все заметные изменения StompForge фиксируются в этом файле.
+Пока нет изменений.
 
-## [0.0.1] — 2026-07-16
+## [0.0.1-alpha] — 2026-07-17
 
-Первый публичный прототип.
+Первая публичная alpha-версия. Числовая версия бинарников и установщика —
+`0.0.1`, канал выпуска — `alpha`.
 
 ### Добавлено
 
-- Модульный педалборд на шесть слотов с обработкой слева направо.
-- Изменение порядка модулей drag-and-drop.
-- Long-tap каталог с категориями Dynamic, Distortion, Modulation, Amp, Reverb,
-  Delay, EQ и Utils.
-- STARGATE — noise gate.
-- DEIMOS-1 — circuit-inspired distortion с 4-кратным oversampling.
-- CERES-2 — BBD-inspired chorus с треугольным LFO.
-- MARS-8 — модель лампового усилителя с блоком питания, оконечным каскадом и
-  переключаемым cabsim 4x12.
-- VOID CHAMBER — алгоритмический reverb.
-- PULSAR — digital delay.
-- FREQUENCY — трёхполосный EQ.
-- LUNER — хроматический тюнер с отображением ноты и отклонения в центах.
-- Входной и выходной gain со сглаживанием.
-- Поддержка VST3 и Standalone; ASIO доступен в Windows Standalone.
-- Сохранение параметров и порядка модулей в состоянии DAW.
-- Windows x64 installer для VST3 и Standalone.
+- Настраиваемая матрица педалборда от 1x1 до 4x3 с двенадцатью физическими
+  слотами, пустыми ячейками, drag-and-drop и сохранением состояния.
+- Каталог Dynamic, Distortion, Modulation, Amp, Reverb, Delay, EQ, Cabs и Utils.
+- STARGATE, DEIMOS-1, FREQUENCY, CERES-2, MARS-8, VULCAN-5, VOID CHAMBER,
+  PULSAR и LUNER.
+- IMPULSE с загрузкой WAV/AIFF, managed fallback cache, Low/High Cut, Level и
+  Mix.
+- MODELER на NeuralAmpModelerCore v0.5.4: загрузка `.nam`, ресемплинг к частоте
+  хоста, независимое stereo-состояние, Input, Output и Mix.
+- По три основных регулятора в карточке эффекта и окно `MORE` для остальных
+  параметров.
+- Вертикальные Input/Output фейдеры с отображением текущего уровня.
+- Windows x64 VST3, Standalone и Inno Setup installer.
+- Новая иконка приложения из исходного Adobe Illustrator artwork.
+
+### Изменено
+
+- Сигнальная цепочка визуально проходит через пустые ячейки и выбирает
+  корректные стороны модулей при горизонтальном, вертикальном и диагональном
+  размещении.
+- Поток педалборда направлен от нижнего правого входа к верхнему левому выходу.
+- Активный IMPULSE подавляет CABSIM amp-модулей; попытка включить CABSIM
+  показывает предупреждение.
 
 ### Исправлено
 
+- NAM architecture parsers принудительно сохраняются при линковке VST3 и
+  Standalone, включая WaveNet, LSTM и SlimmableContainer.
 - Устранено постепенное исчезновение сигнала в нелинейных модулях.
-- В Standalone вход 1 направляется в оба канала, исключая шум незадействованного
-  второго аппаратного входа.
-- Исправлено отображение подзаголовка при несовпадении кодировок.
-
-### Оформление
-
-- Добавлена фирменная иконка приложения и установщика.
-- Кнопки `ON` показывают состояние эффекта: красная подсветка для включённой
-  обработки и тёмный фон для bypass.
+- Standalone направляет аппаратный вход 1 в оба канала stereo-шины.
+- Исправлено восстановление отсутствующих параметров старых DAW-сессий.

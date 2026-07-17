@@ -1,74 +1,122 @@
 # StompForge
 
-## MODELER
+![StompForge icon](Assets/stompforge-icon.png)
 
-The Amp catalog includes MODELER, powered by NeuralAmpModelerCore. Use
-`LOAD NAM` to select a `.nam` file. Models are resampled to the host sample
-rate and stereo channels use independent model instances. The card exposes
-Input, Output and Mix controls.
+**Alpha 0.0.1** — ранняя тестовая версия гитарного аудиопроцессора от
+Vlodzimej Garlic. Доступны Windows x64 VST3 и Standalone. Alpha предназначена
+для проверки звука, совместимости оборудования и пользовательского интерфейса;
+не используйте её как единственный процессор на концерте или при критичной
+записи.
 
-Версия: **0.0.1**. Автор: **Vlodzimej Garlic**.
+## Возможности
 
-Кроссплатформенный гитарный эффект VST3/Standalone на JUCE 8. Виртуальный
-педалборд поддерживает матрицу от 1x1 до 4x3, пустые ячейки, добавление модулей
-из каталога и изменение порядка перетаскиванием.
-Долгое нажатие на карточку открывает каталог замены по категориям Dynamic,
-Distortion, Modulation, Amp, Reverb и Delay.
+- Матрица педалборда от 1x1 до 4x3 с пустыми ячейками и drag-and-drop.
+- До трёх основных регуляторов на карточке; остальные параметры находятся в
+  окне `MORE`.
+- Входной и выходной вертикальные фейдеры с индикаторами уровня.
+- Сохранение параметров, геометрии матрицы и порядка модулей в проекте DAW.
+- Mono и stereo с одинаковым числом входных и выходных каналов.
+- Загрузка cabinet IR в форматах WAV/AIFF.
+- Загрузка моделей Neural Amp Modeler `.nam` с автоматическим согласованием
+  частоты дискретизации хоста.
+- Защита от одновременного включения встроенного amp CABSIM и модуля IMPULSE.
 
-## Эффекты
+## Модули
 
-- STARGATE: noise gate с порогом от -80 до -20 dB.
-- DEIMOS-1: circuit-inspired модель транзисторного предусилителя, кремниевого
-  диодного ограничения и пассивной Tone-секции с 4-кратным oversampling.
-- MARS-8: модель лампового преампа, tone stack, фазоинвертора, двухтактного
-  оконечного усилителя, выходного трансформатора и динамического проседания питания.
-- CERES-2: аналоговый BBD-inspired chorus с треугольным LFO и управлением Rate,
-  Depth и Mix.
-- VOID CHAMBER с управлением Size, Damping и Mix.
-- PULSAR с управлением Time, Feedback и Mix.
-- LUNER: хроматический гитарный тюнер с индикацией ближайшей ноты и отклонения
-  в центах. Доступен в категории Utils.
-- Переключаемый cabsim с усреднённой АЧХ кабинета 4x12 включён по умолчанию.
-- FREQUENCY: трёхполосный активный EQ из категории EQ.
-- Общий выходной уровень, автоматизация параметров и сохранение состояния DAW.
-- Входной gain от -24 до +24 dB. В Standalone первый моно-вход направляется в
-  оба выходных канала до обработки.
-- Mono и stereo.
+- **STARGATE** — noise gate.
+- **DEIMOS-1** — circuit-inspired distortion с 4x oversampling.
+- **FREQUENCY** — трёхполосный EQ.
+- **CERES-2** — BBD-inspired chorus.
+- **MARS-8** — британский ламповый amp с переключаемым 4x12 cabsim.
+- **VULCAN-5** — Clean/Crunch/Lead amp с 6L6-inspired оконечным каскадом.
+- **MODELER** — проигрыватель `.nam` на базе NeuralAmpModelerCore.
+- **IMPULSE** — cabinet IR player с Low Cut, High Cut, Level и Mix.
+- **VOID CHAMBER** — algorithmic reverb.
+- **PULSAR** — digital delay.
+- **LUNER** — проходной хроматический тюнер.
 
-DEIMOS-1 и MARS-8 предназначены для обработки в реальном времени. Это
-circuit-inspired DSP-модели, а не покомпонентные SPICE-симуляции. Для дальнейшей
-калибровки требуются измеренные АЧХ, спектры и re-amp записи эталонных устройств.
+## Сценарии использования
 
-## Сборка на Windows
+- гитарная запись и re-amping в DAW через VST3;
+- домашняя практика через Standalone и аудиоинтерфейс;
+- построение цепочек distortion, modulation, amp, IR, delay и reverb;
+- сравнение собственных amp-моделей с файлами `.nam`;
+- быстрый тюнинг инструмента внутри общей цепочки;
+- прототипирование пресетов и проверка разных порядков эффектов.
 
-Понадобятся Git, CMake 3.22+ и Visual Studio 2022 с компонентом
-**Desktop development with C++**.
+MODELER не содержит моделей усилителей. Пользователь самостоятельно выбирает
+`.nam` и отвечает за право использовать и распространять конкретную модель.
+Аналогичное правило относится к загружаемым impulse response.
+
+## Установка Windows
+
+Установщик размещает:
+
+- VST3 в системный каталог Common Files/VST3;
+- Standalone в Program Files/StompForge.
+
+После установки перезапустите DAW или выполните повторное сканирование VST3.
+В Standalone выберите аудиоинтерфейс, вход гитары, выход и безопасный размер
+буфера. Начинайте с низкой громкости.
+
+## Известные ограничения alpha
+
+- Проверенная release-платформа — Windows 10/11 x64.
+- Файлы `.nam` загружаются синхронно из UI; крупная модель может на короткое
+  время задержать интерфейс.
+- Путь к `.nam` сохраняется, но сам файл модели не встраивается в состояние DAW.
+  При переносе проекта модель должна существовать по сохранённому пути.
+- Пресеты и автоматизированная миграция отсутствующих внешних файлов пока не
+  реализованы.
+- Standalone ожидает гитару на аппаратном входе 1.
+
+## Сборка
+
+Требуются Git, CMake 3.22+ и Visual Studio 2022 с компонентом
+`Desktop development with C++`.
 
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-Для ASIO в Standalone укажите корень установленного ASIO SDK:
+ASIO для Standalone включается только при явной передаче SDK:
 
 ```powershell
-cmake -S . -B build -DASIO_SDK_PATH="C:\SDKs\asiosdk"
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+  -DASIO_SDK_PATH="C:\SDKs\asiosdk"
 cmake --build build --config Release
 ```
 
-В корне SDK должен находиться `common/iasiodrv.h`. Для VST3 аудиодрайвер и
-размер блока задаются самой DAW.
+Без `ASIO_SDK_PATH` собирается Standalone с системными backend JUCE.
 
 Артефакты:
 
 - `build/StompForge_artefacts/Release/VST3/StompForge.vst3`
 - `build/StompForge_artefacts/Release/Standalone/StompForge.exe`
 
-## Сборка на macOS
+Offline-проверка DSP:
 
-```bash
-cmake -S . -B build -G Xcode
-cmake --build build --config Release
+```powershell
+build\StompForgeDspSmokeTest.exe
 ```
 
-Перед коммерческим релизом необходимо выбрать подходящий план лицензирования JUCE.
+## Лицензирование
+
+StompForge распространяется как свободное программное обеспечение по
+[GNU Affero General Public License v3 или более поздней версии](LICENSE).
+Исходный код можно использовать, изучать, изменять и распространять при
+соблюдении условий AGPL, включая предоставление соответствующего исходного
+кода получателям бинарных сборок.
+
+NeuralAmpModelerCore и используемые NAM-компоненты распространяются по
+permissive MIT; Eigen преимущественно использует MPL-2.0. Эти лицензии
+допускают включение в StompForge при сохранении требуемых уведомлений.
+
+JUCE 8 используется по открытому маршруту AGPLv3. Сборка alpha не включает
+ASIO SDK; добавление ASIO требует отдельной проверки и соблюдения применимых
+условий Steinberg.
+
+Сторонние уведомления находятся в
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Это описание не является
+юридической консультацией.
