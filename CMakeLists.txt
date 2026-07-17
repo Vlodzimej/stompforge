@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(StompForge VERSION 0.0.1 LANGUAGES C CXX)
+project(StompForge VERSION 0.0.2 LANGUAGES C CXX)
 if (POLICY CMP0169)
     cmake_policy(SET CMP0169 OLD)
 endif()
@@ -8,6 +8,8 @@ set(ASIO_SDK_PATH "" CACHE PATH "Path to the Steinberg ASIO SDK containing commo
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(cmake/PlatformConfig.cmake)
 
 include(FetchContent)
 FetchContent_Declare(JUCE
@@ -57,16 +59,19 @@ set_target_properties(StompForgeNAMCore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 juce_add_plugin(StompForge
     COMPANY_NAME "Vlodzimej Garlic"
     COMPANY_COPYRIGHT "Copyright (c) 2026 Vlodzimej Garlic"
-    BUNDLE_ID "audio.stompforge.plugin"
+    BUNDLE_ID "${STOMPFORGE_BUNDLE_ID}"
     PLUGIN_MANUFACTURER_CODE Sfau
     PLUGIN_CODE Stmp
-    FORMATS VST3 Standalone
+    FORMATS ${STOMPFORGE_PLUGIN_FORMATS}
     PRODUCT_NAME "StompForge"
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/Assets/stompforge-icon.png"
     ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/Assets/stompforge-icon.png"
-    VST3_CATEGORIES Fx Distortion)
+    VST3_CATEGORIES Fx Distortion
+    ${STOMPFORGE_PLATFORM_OPTIONS})
 
 target_sources(StompForge PRIVATE
+    Source/AssetRepository.cpp
+    Source/AssetRepository.h
     Source/Effects.cpp
     Source/Effects.h
     Source/PluginProcessor.cpp
@@ -77,7 +82,8 @@ target_sources(StompForge PRIVATE
 target_compile_definitions(StompForge PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
-    JUCE_VST3_CAN_REPLACE_VST2=0)
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    STOMPFORGE_APP_GROUP_ID="${STOMPFORGE_IOS_APP_GROUP_ID}")
 
 if (WIN32 AND ASIO_SDK_PATH)
     if (EXISTS "${ASIO_SDK_PATH}/common/iasiodrv.h")
@@ -108,14 +114,16 @@ target_link_libraries(StompForge PRIVATE
 # NAM model architectures register themselves from static initialisers. The
 # JUCE shared-code target is itself a static archive, so format linkers must
 # retain every object from it or parser-only translation units disappear.
-foreach(format_target StompForge_VST3 StompForge_Standalone)
-    if (MSVC)
-        target_link_options(${format_target} PRIVATE "/WHOLEARCHIVE:$<TARGET_FILE:StompForge>")
-    elseif(APPLE)
-        target_link_options(${format_target} PRIVATE "SHELL:-Wl,-force_load,$<TARGET_FILE:StompForge>")
-    else()
-        target_link_options(${format_target} PRIVATE
-            "SHELL:-Wl,--whole-archive $<TARGET_FILE:StompForge> -Wl,--no-whole-archive")
+foreach(format_target StompForge_VST3 StompForge_Standalone StompForge_AUv3)
+    if (TARGET ${format_target})
+        if (MSVC)
+            target_link_options(${format_target} PRIVATE "/WHOLEARCHIVE:$<TARGET_FILE:StompForge>")
+        elseif(APPLE)
+            target_link_options(${format_target} PRIVATE "SHELL:-Wl,-force_load,$<TARGET_FILE:StompForge>")
+        else()
+            target_link_options(${format_target} PRIVATE
+                "SHELL:-Wl,--whole-archive $<TARGET_FILE:StompForge> -Wl,--no-whole-archive")
+        endif()
     endif()
 endforeach()
 

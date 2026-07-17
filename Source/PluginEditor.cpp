@@ -1,10 +1,115 @@
 #include "PluginEditor.h"
 
+#if JUCE_IOS && JucePlugin_Build_Standalone
+ #include <juce_audio_utils/juce_audio_utils.h>
+ #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#endif
+
 namespace
 {
+#if JUCE_IOS
+constexpr int pedalCellGap = 6;
+#else
+constexpr int pedalCellGap = 10;
 constexpr int pedalCellWidth = 290;
 constexpr int pedalCellHeight = 270;
-constexpr int pedalCellGap = 10;
+#endif
+
+enum class MenuIcon
+{
+    dynamic, distortion, modulation, amp, modeler, reverb, delay, eq, cab, utilities, clear
+};
+
+std::unique_ptr<juce::Drawable> makeMenuIcon(MenuIcon type)
+{
+    auto icon = std::make_unique<juce::DrawablePath>();
+    juce::Path path;
+
+    switch (type) {
+        case MenuIcon::dynamic:
+            path.startNewSubPath(12.0f, 2.0f); path.lineTo(21.0f, 6.0f);
+            path.lineTo(19.0f, 16.0f); path.quadraticTo(16.0f, 21.0f, 12.0f, 23.0f);
+            path.quadraticTo(8.0f, 21.0f, 5.0f, 16.0f); path.lineTo(3.0f, 6.0f);
+            path.closeSubPath();
+            break;
+        case MenuIcon::distortion:
+            path.startNewSubPath(14.0f, 1.0f); path.lineTo(5.0f, 13.0f);
+            path.lineTo(11.0f, 13.0f); path.lineTo(9.0f, 23.0f);
+            path.lineTo(20.0f, 9.0f); path.lineTo(14.0f, 9.0f); path.closeSubPath();
+            break;
+        case MenuIcon::modulation:
+            path.startNewSubPath(1.0f, 12.0f);
+            path.cubicTo(5.0f, 2.0f, 8.0f, 2.0f, 12.0f, 12.0f);
+            path.cubicTo(16.0f, 22.0f, 19.0f, 22.0f, 23.0f, 12.0f);
+            break;
+        case MenuIcon::amp:
+            path.addRoundedRectangle(2.0f, 4.0f, 20.0f, 16.0f, 2.0f);
+            path.addEllipse(6.0f, 9.0f, 5.0f, 5.0f);
+            path.addEllipse(14.0f, 9.0f, 5.0f, 5.0f);
+            break;
+        case MenuIcon::modeler:
+            path.addEllipse(2.0f, 9.0f, 5.0f, 5.0f);
+            path.addEllipse(9.5f, 2.0f, 5.0f, 5.0f);
+            path.addEllipse(9.5f, 17.0f, 5.0f, 5.0f);
+            path.addEllipse(17.0f, 9.0f, 5.0f, 5.0f);
+            path.startNewSubPath(6.0f, 11.0f); path.lineTo(11.0f, 5.0f);
+            path.startNewSubPath(6.0f, 13.0f); path.lineTo(11.0f, 19.0f);
+            path.startNewSubPath(13.0f, 5.0f); path.lineTo(18.0f, 11.0f);
+            path.startNewSubPath(13.0f, 19.0f); path.lineTo(18.0f, 13.0f);
+            break;
+        case MenuIcon::reverb:
+            path.addStar({12.0f, 12.0f}, 8, 3.0f, 11.0f, 0.0f);
+            break;
+        case MenuIcon::delay:
+            path.addEllipse(1.0f, 10.0f, 4.0f, 4.0f);
+            path.addCentredArc(4.0f, 12.0f, 5.0f, 5.0f, 0.0f,
+                               -juce::MathConstants<float>::halfPi,
+                               juce::MathConstants<float>::halfPi, true);
+            path.addCentredArc(4.0f, 12.0f, 10.0f, 10.0f, 0.0f,
+                               -juce::MathConstants<float>::halfPi,
+                               juce::MathConstants<float>::halfPi, true);
+            path.addCentredArc(4.0f, 12.0f, 15.0f, 15.0f, 0.0f,
+                               -juce::MathConstants<float>::halfPi,
+                               juce::MathConstants<float>::halfPi, true);
+            break;
+        case MenuIcon::eq:
+            for (int x : {5, 12, 19}) {
+                path.startNewSubPath(static_cast<float>(x), 3.0f);
+                path.lineTo(static_cast<float>(x), 21.0f);
+            }
+            path.addEllipse(2.0f, 6.0f, 6.0f, 6.0f);
+            path.addEllipse(9.0f, 13.0f, 6.0f, 6.0f);
+            path.addEllipse(16.0f, 4.0f, 6.0f, 6.0f);
+            break;
+        case MenuIcon::cab:
+            path.addRoundedRectangle(3.0f, 2.0f, 18.0f, 20.0f, 2.0f);
+            path.addEllipse(6.0f, 5.0f, 12.0f, 12.0f);
+            path.addEllipse(10.0f, 9.0f, 4.0f, 4.0f);
+            break;
+        case MenuIcon::utilities:
+            path.startNewSubPath(5.0f, 2.0f); path.lineTo(5.0f, 12.0f);
+            path.quadraticTo(5.0f, 18.0f, 12.0f, 18.0f);
+            path.quadraticTo(19.0f, 18.0f, 19.0f, 12.0f);
+            path.lineTo(19.0f, 2.0f);
+            path.startNewSubPath(5.0f, 7.0f); path.lineTo(19.0f, 7.0f);
+            path.startNewSubPath(12.0f, 18.0f); path.lineTo(12.0f, 23.0f);
+            break;
+        case MenuIcon::clear:
+            path.startNewSubPath(4.0f, 4.0f); path.lineTo(20.0f, 20.0f);
+            path.startNewSubPath(20.0f, 4.0f); path.lineTo(4.0f, 20.0f);
+            break;
+    }
+
+    icon->setPath(path);
+    const auto colour = juce::Colour(0xffffc77d);
+    if (type == MenuIcon::distortion || type == MenuIcon::dynamic || type == MenuIcon::reverb)
+        icon->setFill(colour);
+    else
+        icon->setFill(juce::Colours::transparentBlack);
+    icon->setStrokeFill(colour);
+    icon->setStrokeThickness(2.0f);
+    return icon;
+}
 
 void configureKnob(juce::Slider& knob, juce::Colour colour)
 {
@@ -67,19 +172,64 @@ public:
         g.drawText("OUTPUT", last.toNearestInt().removeFromTop(18), juce::Justification::centred);
         g.setColour(juce::Colour(0xffffc77d)); g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
         g.drawText((hoveredRows > 0 ? "PREVIEW  " : "CURRENT  ")
-                       + juce::String(previewColumns) + " x " + juce::String(previewRows), 18, 280,
-                   getWidth() - 36, 20, juce::Justification::centred);
+                       + juce::String(previewColumns) + " x " + juce::String(previewRows),
+                   18, getHeight() - 28, getWidth() - 36, 20, juce::Justification::centred);
     }
 
     void mouseMove(const juce::MouseEvent& event) override
     {
-        const auto area = gridArea();
-        if (!area.contains(event.position)) {
+        if (!dragging)
+            updatePreview(event.position);
+    }
+
+    void mouseExit(const juce::MouseEvent&) override
+    {
+        if (!dragging)
             clearHover();
+    }
+
+    void mouseDown(const juce::MouseEvent& event) override
+    {
+        dragging = gridArea().contains(event.position);
+        if (dragging)
+            updatePreview(event.position);
+    }
+
+    void mouseDrag(const juce::MouseEvent& event) override
+    {
+        if (dragging)
+            updatePreview(event.position);
+    }
+
+    void mouseUp(const juce::MouseEvent& event) override
+    {
+        if (!dragging)
             return;
-        }
-        const auto newColumns = juce::jlimit(1, 4, 1 + static_cast<int>((event.position.x - area.getX()) / (area.getWidth() / 4.0f)));
-        const auto newRows = juce::jlimit(1, 3, 1 + static_cast<int>((event.position.y - area.getY()) / (area.getHeight() / 3.0f)));
+
+        updatePreview(event.position);
+        dragging = false;
+        if (hoveredRows <= 0 || hoveredColumns <= 0)
+            return;
+
+        rows = hoveredRows;
+        columns = hoveredColumns;
+        clearHover();
+        if (onSelected)
+            onSelected(rows, columns);
+
+        if (auto* callout = findParentComponentOfClass<juce::CallOutBox>())
+            callout->toFront(true);
+    }
+
+private:
+    void updatePreview(juce::Point<float> position)
+    {
+        const auto area = gridArea();
+        const auto constrained = area.getConstrainedPoint(position);
+        const auto newColumns = juce::jlimit(
+            1, 4, 1 + static_cast<int>((constrained.x - area.getX()) / (area.getWidth() / 4.0f)));
+        const auto newRows = juce::jlimit(
+            1, 3, 1 + static_cast<int>((constrained.y - area.getY()) / (area.getHeight() / 3.0f)));
         if (newRows != hoveredRows || newColumns != hoveredColumns) {
             hoveredRows = newRows;
             hoveredColumns = newColumns;
@@ -87,28 +237,19 @@ public:
         }
     }
 
-    void mouseExit(const juce::MouseEvent&) override { clearHover(); }
-
-    void mouseDown(const juce::MouseEvent& event) override
-    {
-        const auto area = gridArea();
-        if (!area.contains(event.position)) return;
-        const auto newColumns = juce::jlimit(1, 4, 1 + static_cast<int>((event.position.x - area.getX()) / (area.getWidth() / 4.0f)));
-        const auto newRows = juce::jlimit(1, 3, 1 + static_cast<int>((event.position.y - area.getY()) / (area.getHeight() / 3.0f)));
-        rows = newRows; columns = newColumns; repaint();
-        if (onSelected) onSelected(rows, columns);
-    }
-
-private:
     void clearHover()
     {
         if (hoveredRows == 0 && hoveredColumns == 0) return;
         hoveredRows = hoveredColumns = 0;
         repaint();
     }
-    juce::Rectangle<float> gridArea() const { return { 42.0f, 70.0f, 356.0f, 200.0f }; }
+    juce::Rectangle<float> gridArea() const
+    {
+        return getLocalBounds().toFloat().reduced(28.0f).withTrimmedTop(42.0f).withTrimmedBottom(18.0f);
+    }
     int rows, columns;
     int hoveredRows = 0, hoveredColumns = 0;
+    bool dragging = false;
     std::function<void(int, int)> onSelected;
 };
 
@@ -202,6 +343,46 @@ private:
     float level = 0.0f;
 };
 
+class StompForgeAudioProcessorEditor::TouchMenuLookAndFeel final : public juce::LookAndFeel_V4
+{
+public:
+    juce::Font getPopupMenuFont() override
+    {
+        return juce::Font(juce::FontOptions(20.0f));
+    }
+};
+
+class EffectChooserButton final : public juce::Button
+{
+public:
+    EffectChooserButton() : juce::Button("Choose effect") {}
+
+    void paintButton(juce::Graphics& g, bool highlighted, bool down) override
+    {
+        auto bounds = getLocalBounds().toFloat().reduced(1.0f);
+        g.setColour(down ? juce::Colour(0xffa34f24)
+                         : highlighted ? juce::Colour(0xff343a44)
+                                       : juce::Colour(0xaa17191e));
+        g.fillRoundedRectangle(bounds, 6.0f);
+        g.setColour(juce::Colour(0xff8b939e));
+        g.drawRoundedRectangle(bounds, 6.0f, 1.2f);
+
+        const auto accent = juce::Colour(0xffffd28c);
+        g.setColour(accent);
+        const auto left = bounds.getX() + bounds.getWidth() * 0.22f;
+        const auto right = bounds.getRight() - bounds.getWidth() * 0.22f;
+        const auto centreY = bounds.getCentreY();
+        for (int row = -1; row <= 1; ++row) {
+            const auto y = centreY + static_cast<float>(row) * bounds.getHeight() * 0.21f;
+            g.drawLine(left, y, right, y, 1.8f);
+            const auto knobX = row == -1 ? left + (right - left) * 0.28f
+                              : row == 0 ? left + (right - left) * 0.70f
+                                         : left + (right - left) * 0.46f;
+            g.fillEllipse(knobX - 2.4f, y - 2.4f, 4.8f, 4.8f);
+        }
+    }
+};
+
 class StompForgeAudioProcessorEditor::PedalCard final : public juce::Component,
                                                           public juce::DragAndDropTarget,
                                                           private juce::Timer
@@ -217,9 +398,13 @@ public:
         : editor(owner), id(pedalId), name(std::move(pedalName)), colour(pedalColour),
           tunerDisplay(showTuner), impulseLoader(showImpulseLoader), modelerLoader(showModelerLoader)
     {
+        chooseEffect.setTooltip("Choose effect");
+        chooseEffect.onClick = [this] { editor.showEffectMenu(slot); };
+        addAndMakeVisible(chooseEffect);
+
         for (auto* value : parameterIds) allIds.emplace_back(value);
         for (auto* value : parameterNames) allNames.emplace_back(value);
-        const auto visibleCount = juce::jmin<size_t>(3, allIds.size());
+        const auto visibleCount = std::min<size_t>(3, allIds.size());
         for (size_t i = 0; i < visibleCount; ++i) {
             auto knob = std::make_unique<juce::Slider>();
             configureParameterSlider(*knob, allIds[i], colour);
@@ -299,6 +484,13 @@ public:
                                               : editor.processor.getCabImpulseName(),
                                 juce::dontSendNotification);
             addAndMakeVisible(impulseName);
+           #if JUCE_IOS
+            if (modelerLoader) {
+                loadImpulse.setEnabled(false);
+                bypass.setEnabled(false);
+                impulseName.setText("UNAVAILABLE ON IOS", juce::dontSendNotification);
+            }
+           #endif
             loadImpulse.onClick = [this] {
                 chooser = std::make_unique<juce::FileChooser>(
                     modelerLoader ? "Load Neural Amp Model" : "Load cabinet impulse response",
@@ -307,19 +499,21 @@ public:
                 chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                     [safeThis] (const juce::FileChooser& selected) {
                         if (safeThis == nullptr) return;
-                        const auto file = selected.getResult();
-                        if (!file.existsAsFile()) return;
                         if (safeThis->modelerLoader) {
+                            const auto url = selected.getURLResult();
+                            if (!url.isLocalFile()) return;
                             juce::String error;
-                            if (safeThis->editor.processor.loadModelerModel(file, error))
+                            if (safeThis->editor.processor.loadModelerModel(url, error))
                                 safeThis->impulseName.setText(safeThis->editor.processor.getModelerName(),
                                                               juce::dontSendNotification);
                             else
                                 juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
                                     "Unable to load NAM model", error);
-                        } else if (safeThis->editor.processor.loadCabImpulse(file)) {
-                            safeThis->impulseName.setText(safeThis->editor.processor.getCabImpulseName(),
-                                                          juce::dontSendNotification);
+                        } else {
+                            const auto url = selected.getURLResult();
+                            if (url.isLocalFile() && safeThis->editor.processor.loadCabImpulse(url))
+                                safeThis->impulseName.setText(safeThis->editor.processor.getCabImpulseName(),
+                                                              juce::dontSendNotification);
                         }
                     });
             };
@@ -375,11 +569,10 @@ public:
         g.setColour(colour.brighter(0.4f));
         g.drawRoundedRectangle(bounds, 13.0f, dragOver ? 4.0f : 1.5f);
         g.setColour(juce::Colour(0xfff8efd8));
-        g.setFont(juce::FontOptions(20.0f, juce::Font::bold));
-        g.drawText(name, 12, 8, getWidth() - 24, 28, juce::Justification::centred);
-        g.setFont(juce::FontOptions(11.0f));
-        g.drawText("DRAG TO REORDER  |  HOLD TO REPLACE", 12, 34, getWidth() - 24, 16,
-                   juce::Justification::centred);
+        const auto compact = getHeight() < 190;
+        const auto titleHeight = compact ? 22 : 28;
+        g.setFont(juce::FontOptions(compact ? 14.0f : 20.0f, juce::Font::bold));
+        g.drawText(name, 42, 5, getWidth() - 84, titleHeight, juce::Justification::centred);
         if (tunerDisplay) {
             const auto state = editor.processor.getTunerState();
             static constexpr std::array<const char*, 12> noteNames {
@@ -390,14 +583,20 @@ public:
                     + juce::String(state.midiNote / 12 - 1)
                 : juce::String("--");
             g.setColour(juce::Colour(0xffeef5f1));
-            g.setFont(juce::FontOptions(48.0f, juce::Font::bold));
-            g.drawText(noteName, 18, 62, getWidth() - 36, 58, juce::Justification::centred);
-            g.setFont(juce::FontOptions(13.0f));
+            const auto displayTop = compact ? 25 : 55;
+            const auto displayHeight = juce::jmax(28, getHeight() - displayTop - (compact ? 38 : 74));
+            g.setFont(juce::FontOptions(compact ? 25.0f : 48.0f, juce::Font::bold));
+            g.drawText(noteName, 12, displayTop, getWidth() - 24, displayHeight / 2,
+                       juce::Justification::centred);
+            g.setFont(juce::FontOptions(compact ? 9.0f : 13.0f));
             g.drawText(hasNote ? juce::String(state.frequency, 1) + " Hz" : "PLAY A STRING",
-                       18, 118, getWidth() - 36, 22, juce::Justification::centred);
+                       12, displayTop + displayHeight / 2, getWidth() - 24, 18,
+                       juce::Justification::centred);
 
-            const auto rail = juce::Rectangle<float>(24.0f, 154.0f,
-                static_cast<float>(getWidth() - 48), 18.0f);
+            const auto railY = static_cast<float>(
+                displayTop + displayHeight - (compact ? 12 : 24));
+            const auto rail = juce::Rectangle<float>(12.0f, railY,
+                static_cast<float>(getWidth() - 24), compact ? 10.0f : 18.0f);
             const auto centre = rail.getCentreX();
             g.setColour(juce::Colour(0xff182127)); g.fillRoundedRectangle(rail, 7.0f);
             g.setColour(juce::Colour(0xff607078)); g.drawRoundedRectangle(rail, 7.0f, 1.0f);
@@ -413,56 +612,81 @@ public:
                     : juce::Rectangle<float>(centre, rail.getY(), length, rail.getHeight());
                 g.fillRoundedRectangle(meter, 6.0f);
                 g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
-                g.drawText(juce::String(state.cents, 1) + " cents", 20, 178,
-                           getWidth() - 40, 20, juce::Justification::centred);
+                if (!compact)
+                    g.drawText(juce::String(state.cents, 1) + " cents", 20,
+                               juce::roundToInt(rail.getBottom()) + 4,
+                               getWidth() - 40, 20, juce::Justification::centred);
             }
             g.setColour(juce::Colour(0xff7dff9d));
             g.fillRect(centre - 1.5f, rail.getY() - 3.0f, 3.0f, rail.getHeight() + 6.0f);
         }
         g.setColour(juce::Colour(0xaa17191e));
-        g.fillRoundedRectangle(14.0f, static_cast<float>(getHeight() - 72),
-                               static_cast<float>(getWidth() - 28), 56.0f, 7.0f);
+        const auto footerHeight = compact ? 34.0f : 56.0f;
+        g.fillRoundedRectangle(8.0f, static_cast<float>(getHeight()) - footerHeight - 8.0f,
+                               static_cast<float>(getWidth() - 16), footerHeight, 7.0f);
     }
 
     void resized() override
     {
-        auto controls = getLocalBounds().reduced(10).withTrimmedTop(
-            (impulseLoader || modelerLoader) ? 68 : 48).withTrimmedBottom(76);
+        const auto compact = getHeight() < 190;
+        const auto chooseWidth = compact ? 30 : 42;
+        const auto chooseHeight = compact ? 25 : 32;
+        chooseEffect.setBounds(getWidth() - chooseWidth - (compact ? 5 : 9),
+                               compact ? 5 : 8, chooseWidth, chooseHeight);
+        const auto footerHeight = compact ? 42 : 76;
+        const auto headerHeight = compact ? ((impulseLoader || modelerLoader) ? 40 : 26)
+                                          : ((impulseLoader || modelerLoader) ? 68 : 38);
+        auto controls = getLocalBounds().reduced(compact ? 5 : 10)
+            .withTrimmedTop(headerHeight).withTrimmedBottom(footerHeight);
         const auto rows = knobs.size() > 3 ? 2 : 1;
         const auto perRow = static_cast<int>((knobs.size() + rows - 1) / rows);
         const auto cellWidth = perRow > 0 ? controls.getWidth() / perRow : 0;
         for (size_t i = 0; i < knobs.size(); ++i) {
             auto row = controls.withHeight(controls.getHeight() / rows).translated(0, static_cast<int>(i / perRow) * controls.getHeight() / rows);
             auto cell = row.withWidth(cellWidth).translated(static_cast<int>(i % perRow) * cellWidth, 0);
-            labels[i]->setBounds(cell.removeFromTop(20));
-            knobs[i]->setBounds(cell.reduced(1));
+            const auto labelHeight = compact ? 13 : 20;
+            const auto textBoxHeight = compact ? 12 : 18;
+            const auto sliderHeight = juce::jmin(cell.getHeight() - labelHeight,
+                                                 cell.getWidth() + textBoxHeight);
+            auto parameterGroup = cell.withSizeKeepingCentre(
+                cell.getWidth(), labelHeight + sliderHeight);
+            labels[i]->setBounds(parameterGroup.removeFromTop(labelHeight));
+            labels[i]->setFont(juce::FontOptions(compact ? 8.0f : 12.0f));
+            knobs[i]->setTextBoxStyle(juce::Slider::TextBoxBelow, false,
+                                      compact ? juce::jmax(34, cell.getWidth() - 4) : 64,
+                                      textBoxHeight);
+            knobs[i]->setBounds(parameterGroup.reduced(compact ? 0 : 1));
         }
         const auto hasOption = optionAttachment != nullptr || impulseLoader || modelerLoader;
         const auto hasMore = allIds.size() > 3;
         const auto buttonCount = 1 + static_cast<int>(hasOption) + static_cast<int>(hasMore);
-        const auto buttonWidth = 74, gap = 8;
+        const auto gap = compact ? 3 : 8;
+        const auto availableWidth = getWidth() - 16 - (buttonCount - 1) * gap;
+        const auto buttonWidth = juce::jmin(74, availableWidth / buttonCount);
         auto x = (getWidth() - (buttonCount * buttonWidth + (buttonCount - 1) * gap)) / 2;
-        bypass.setBounds(x, getHeight() - 62, buttonWidth, 38); x += buttonWidth + gap;
-        if (hasOption) option.setBounds(x, getHeight() - 62, buttonWidth, 38), x += buttonWidth + gap;
-        if (hasMore) more.setBounds(x, getHeight() - 62, buttonWidth, 38);
+        const auto buttonHeight = compact ? 26 : 38;
+        const auto footerPanelHeight = compact ? 34 : 56;
+        const auto footerTop = getHeight() - footerPanelHeight - 8;
+        const auto buttonY = footerTop + (footerPanelHeight - buttonHeight) / 2;
+        bypass.setBounds(x, buttonY, buttonWidth, buttonHeight); x += buttonWidth + gap;
+        if (hasOption) option.setBounds(x, buttonY, buttonWidth, buttonHeight), x += buttonWidth + gap;
+        if (hasMore) more.setBounds(x, buttonY, buttonWidth, buttonHeight);
         if (impulseLoader || modelerLoader) {
             option.setVisible(false);
             loadImpulse.setBounds(option.getBounds());
-            impulseName.setBounds(16, 48, getWidth() - 32, 18);
+            impulseName.setBounds(8, compact ? 24 : 48, getWidth() - 16, compact ? 13 : 18);
         }
     }
 
 private:
     void showAdvancedControls()
     {
-        juce::DialogWindow::LaunchOptions options;
-        options.dialogTitle = name + " — Advanced controls";
-        options.dialogBackgroundColour = juce::Colour(0xff15181e);
-        options.escapeKeyTriggersCloseButton = true;
-        options.useNativeTitleBar = true;
-        options.resizable = false;
-        options.content.setOwned(new AdvancedControls(editor.processor.parameters, colour, allIds, allNames));
-        options.launchAsync();
+        auto content = std::make_unique<AdvancedControls>(
+            editor.processor.parameters, colour, allIds, allNames);
+        content->setSize(juce::jmin(content->getWidth(), juce::jmax(260, editor.getWidth() - 40)),
+                         juce::jmin(content->getHeight(), juce::jmax(220, editor.getHeight() - 40)));
+        const auto anchor = editor.getLocalArea(&more, more.getLocalBounds());
+        juce::CallOutBox::launchAsynchronously(std::move(content), anchor, &editor);
     }
     void timerCallback() override
     {
@@ -480,6 +704,7 @@ private:
     std::vector<std::unique_ptr<SliderAttachment>> attachments;
     std::vector<juce::String> allIds, allNames;
     juce::TextButton bypass;
+    EffectChooserButton chooseEffect;
     std::unique_ptr<juce::ParameterAttachment> bypassAttachment;
     juce::TextButton option;
     juce::TextButton more;
@@ -552,6 +777,7 @@ private:
 StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
+    touchMenuLookAndFeel = std::make_unique<TouchMenuLookAndFeel>();
     pedals[0] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::gate,
         "STARGATE", juce::Colour(0xff287f78), std::initializer_list<const char*>{"gate"},
         std::initializer_list<const char*>{"THRESHOLD"}, "gateBypass");
@@ -620,60 +846,140 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
     gridButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffffc77d));
     gridButton.onClick = [this] { showGridSelector(); };
     addAndMakeVisible(gridButton);
+   #if JUCE_IOS && JucePlugin_Build_Standalone
+    if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone) {
+        bufferButton.setButtonText("BUFFER");
+        bufferButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292d35));
+        bufferButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffbdefff));
+        bufferButton.onClick = [this] {
+            juce::PopupMenu menu;
+            constexpr std::array<int, 4> sizes { 128, 256, 512, 1024 };
+            auto currentSize = 0;
+            if (auto* holder = juce::StandalonePluginHolder::getInstance())
+                if (auto* device = holder->deviceManager.getCurrentAudioDevice())
+                    currentSize = device->getCurrentBufferSizeSamples();
+            for (const auto size : sizes)
+                menu.addItem(size, juce::String(size) + " samples", true, size == currentSize);
+            auto safeThis = juce::Component::SafePointer<StompForgeAudioProcessorEditor>(this);
+            menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&bufferButton),
+                [safeThis] (int selectedSize) {
+                    if (safeThis == nullptr || selectedSize <= 0) return;
+                    if (auto* holder = juce::StandalonePluginHolder::getInstance()) {
+                        auto setup = holder->deviceManager.getAudioDeviceSetup();
+                        setup.bufferSize = selectedSize;
+                        holder->deviceManager.setAudioDeviceSetup(setup, true);
+                    }
+                });
+        };
+        addAndMakeVisible(bufferButton);
+    }
+   #endif
     setResizable(true, true);
     setSize(1100, 760);
     updateResizeLimitsForGrid(true);
     startTimerHz(20);
 }
 
-StompForgeAudioProcessorEditor::~StompForgeAudioProcessorEditor() = default;
+StompForgeAudioProcessorEditor::~StompForgeAudioProcessorEditor()
+{
+    persistStandaloneStateIfChanged(true);
+}
+
+void StompForgeAudioProcessorEditor::persistStandaloneStateIfChanged(bool force)
+{
+   #if JUCE_IOS && JucePlugin_Build_Standalone
+    if (processor.wrapperType != juce::AudioProcessor::wrapperType_Standalone)
+        return;
+
+    juce::MemoryBlock state;
+    processor.getStateInformation(state);
+    const auto hash = state.toBase64Encoding().hashCode64();
+    if (!force && hash == lastPersistedStateHash)
+        return;
+
+    if (auto* holder = juce::StandalonePluginHolder::getInstance()) {
+        holder->savePluginState();
+        if (auto* properties = dynamic_cast<juce::PropertiesFile*>(holder->settings.get()))
+            properties->saveIfNeeded();
+        lastPersistedStateHash = hash;
+    }
+   #else
+    juce::ignoreUnused(force);
+   #endif
+}
 
 void StompForgeAudioProcessorEditor::showGridSelector()
 {
     auto safeThis = juce::Component::SafePointer<StompForgeAudioProcessorEditor>(this);
-    juce::DialogWindow::LaunchOptions options;
-    options.dialogTitle = "Pedalboard grid";
-    options.dialogBackgroundColour = juce::Colour(0xff15181e);
-    options.escapeKeyTriggersCloseButton = true;
-    options.useNativeTitleBar = true;
-    options.resizable = false;
-    options.content.setOwned(new GridSelector(processor.getGridRows(), processor.getGridColumns(),
+    auto content = std::make_unique<GridSelector>(processor.getGridRows(), processor.getGridColumns(),
         [safeThis] (int rows, int columns) {
             if (safeThis == nullptr) return;
             if (safeThis->processor.setGridSize(rows, columns)) {
-                safeThis->updateResizeLimitsForGrid(true);
+                safeThis->updateResizeLimitsForGrid(false);
                 safeThis->layoutPedals();
             }
-        }));
-    options.launchAsync();
+        });
+    content->setSize(juce::jmin(440, juce::jmax(320, getWidth() - 30)),
+                     juce::jmin(310, juce::jmax(260, getHeight() - 30)));
+    juce::CallOutBox::launchAsynchronously(
+        std::move(content), getLocalArea(&gridButton, gridButton.getLocalBounds()), this);
 }
 
 void StompForgeAudioProcessorEditor::showEffectMenu(int slot)
 {
     using Id = StompForgeAudioProcessor::PedalId;
-    auto item = [] (Id id, const juce::String& name) {
-        juce::PopupMenu menu; menu.addItem(static_cast<int>(id) + 1, name); return menu;
+    auto item = [] (Id id, MenuIcon icon, const juce::String& name) {
+        juce::PopupMenu menu;
+        menu.addItem(static_cast<int>(id) + 1, name, true, false, makeMenuIcon(icon));
+        return menu;
     };
     juce::PopupMenu menu;
-    menu.addSubMenu("Dynamic", item(Id::gate, "STARGATE"));
-    menu.addSubMenu("Distortion", item(Id::ds1, "DEIMOS-1"));
-    menu.addSubMenu("Modulation", item(Id::chorus, "CERES-2"));
+    menu.setLookAndFeel(touchMenuLookAndFeel.get());
+    menu.addSubMenu("DYNAMIC", item(Id::gate, MenuIcon::dynamic, "STARGATE"),
+                    true, makeMenuIcon(MenuIcon::dynamic));
+    menu.addSubMenu("DISTORTION", item(Id::ds1, MenuIcon::distortion, "DEIMOS-1"),
+                    true, makeMenuIcon(MenuIcon::distortion));
+    menu.addSubMenu("MODULATION", item(Id::chorus, MenuIcon::modulation, "CERES-2"),
+                    true, makeMenuIcon(MenuIcon::modulation));
     juce::PopupMenu amps;
-    amps.addItem(static_cast<int>(Id::jcm800) + 1, "MARS-8");
-    amps.addItem(static_cast<int>(Id::amp5150) + 1, "VULCAN-5");
-    amps.addItem(static_cast<int>(Id::modeler) + 1, "MODELER");
-    menu.addSubMenu("Amp", amps);
-    menu.addSubMenu("Reverb", item(Id::reverb, "VOID CHAMBER"));
-    menu.addSubMenu("Delay", item(Id::delay, "PULSAR"));
-    menu.addSubMenu("EQ", item(Id::tone, "FREQUENCY"));
-    menu.addSubMenu("Cabs", item(Id::impulseCab, "IMPULSE"));
-    menu.addSubMenu("Utils", item(Id::tuner, "LUNER"));
+    amps.addItem(static_cast<int>(Id::jcm800) + 1, "MARS-8",
+                 true, false, makeMenuIcon(MenuIcon::amp));
+    amps.addItem(static_cast<int>(Id::amp5150) + 1, "VULCAN-5",
+                 true, false, makeMenuIcon(MenuIcon::cab));
+   #if JUCE_IOS
+    amps.addItem(static_cast<int>(Id::modeler) + 1, "MODELER (UNAVAILABLE ON IOS)",
+                 false, false, makeMenuIcon(MenuIcon::modeler));
+   #else
+    amps.addItem(static_cast<int>(Id::modeler) + 1, "MODELER",
+                 true, false, makeMenuIcon(MenuIcon::modeler));
+   #endif
+    menu.addSubMenu("AMP", amps, true, makeMenuIcon(MenuIcon::amp));
+    menu.addSubMenu("REVERB", item(Id::reverb, MenuIcon::reverb, "VOID CHAMBER"),
+                    true, makeMenuIcon(MenuIcon::reverb));
+    menu.addSubMenu("DELAY", item(Id::delay, MenuIcon::delay, "PULSAR"),
+                    true, makeMenuIcon(MenuIcon::delay));
+    menu.addSubMenu("EQ", item(Id::tone, MenuIcon::eq, "FREQUENCY"),
+                    true, makeMenuIcon(MenuIcon::eq));
+    menu.addSubMenu("CABS", item(Id::impulseCab, MenuIcon::cab, "IMPULSE"),
+                    true, makeMenuIcon(MenuIcon::cab));
+    menu.addSubMenu("UTILS", item(Id::tuner, MenuIcon::utilities, "LUNER"),
+                    true, makeMenuIcon(MenuIcon::utilities));
     const auto currentOrder = processor.getPedalOrder();
     menu.addSeparator();
-    menu.addItem(1000, "Clear current cell",
-        currentOrder[static_cast<size_t>(slot)] != Id::empty);
+    menu.addItem(1000, "CLEAR CURRENT CELL",
+                 currentOrder[static_cast<size_t>(slot)] != Id::empty,
+                 false, makeMenuIcon(MenuIcon::clear));
     auto safeThis = juce::Component::SafePointer<StompForgeAudioProcessorEditor>(this);
-    menu.showMenuAsync(juce::PopupMenu::Options(), [safeThis, slot] (int result) {
+    juce::Component* target = gridCells[static_cast<size_t>(slot)].get();
+    const auto currentId = currentOrder[static_cast<size_t>(slot)];
+    if (currentId != Id::empty)
+        target = pedals[static_cast<size_t>(currentId)].get();
+    const auto options = juce::PopupMenu::Options()
+        .withTargetComponent(target)
+        .withMinimumWidth(310)
+        .withStandardItemHeight(52)
+        .withMaximumNumColumns(1);
+    menu.showMenuAsync(options, [safeThis, slot] (int result) {
         if (safeThis != nullptr && result == 1000) {
             safeThis->processor.clearPedal(slot);
             safeThis->layoutPedals();
@@ -688,6 +994,16 @@ void StompForgeAudioProcessorEditor::timerCallback()
 {
     inputFader->setSignalLevel(processor.consumeInputLevel());
     outputFader->setSignalLevel(processor.consumeOutputLevel());
+    if (++persistenceTimerTicks >= 5) {
+        persistenceTimerTicks = 0;
+        persistStandaloneStateIfChanged(false);
+    }
+   #if JUCE_IOS && JucePlugin_Build_Standalone
+    if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone)
+        if (auto* holder = juce::StandalonePluginHolder::getInstance())
+            if (auto* device = holder->deviceManager.getCurrentAudioDevice())
+                bufferButton.setButtonText("BUF " + juce::String(device->getCurrentBufferSizeSamples()));
+   #endif
     if (pedals[static_cast<size_t>(StompForgeAudioProcessor::PedalId::tuner)]->isVisible())
         pedals[static_cast<size_t>(StompForgeAudioProcessor::PedalId::tuner)]->repaint();
 }
@@ -830,20 +1146,27 @@ void StompForgeAudioProcessorEditor::layoutPedals()
         pedal->setBounds(getGridCellBounds(slot));
         pedal->toFront(false);
     }
+    for (int index = 0; index < getNumChildComponents(); ++index)
+        if (auto* callout = dynamic_cast<juce::CallOutBox*>(getChildComponent(index)))
+            callout->toFront(false);
     repaint();
 }
 
 void StompForgeAudioProcessorEditor::updateResizeLimitsForGrid(bool growIfNeeded)
 {
-    // These dimensions keep rotary controls, labels and the two-row amp layouts
-    // large enough for accurate mouse operation in every effect module.
+   #if JUCE_IOS
+    constexpr int minimumWidth = 640;
+    constexpr int minimumHeight = 340;
+   #else
     constexpr int horizontalChrome = 18 * 2 + 100 * 2;
     constexpr int verticalChrome = 18 * 2 + 70 + 12;
     const auto columns = processor.getGridColumns();
     const auto rows = processor.getGridRows();
-    const auto minimumWidth = horizontalChrome + columns * pedalCellWidth + (columns - 1) * pedalCellGap;
-    const auto minimumHeight = verticalChrome + rows * pedalCellHeight + (rows - 1) * pedalCellGap;
-
+    const auto minimumWidth = horizontalChrome + columns * pedalCellWidth
+        + (columns - 1) * pedalCellGap;
+    const auto minimumHeight = verticalChrome + rows * pedalCellHeight
+        + (rows - 1) * pedalCellGap;
+   #endif
     setResizeLimits(minimumWidth, minimumHeight, 1920, 1200);
     if (growIfNeeded && (getWidth() < minimumWidth || getHeight() < minimumHeight))
         setSize(juce::jmax(getWidth(), minimumWidth), juce::jmax(getHeight(), minimumHeight));
@@ -851,29 +1174,53 @@ void StompForgeAudioProcessorEditor::updateResizeLimitsForGrid(bool growIfNeeded
 
 juce::Rectangle<int> StompForgeAudioProcessorEditor::getGridCellBounds(int slot) const
 {
+   #if JUCE_IOS
+    const auto compact = getHeight() < 600 || getWidth() < 1000;
+    const auto outerMargin = compact ? 8 : 18;
+    const auto headerHeight = compact ? 48 : 70;
+    const auto faderWidth = compact ? 58 : 100;
+    auto area = getLocalBounds().reduced(outerMargin)
+        .withTrimmedTop(headerHeight).withTrimmedBottom(compact ? 6 : 12);
+    area.removeFromLeft(faderWidth); area.removeFromRight(faderWidth);
+    const int columns = processor.getGridColumns(), rows = processor.getGridRows();
+    const auto cellWidth = (area.getWidth() - (columns - 1) * pedalCellGap) / columns;
+    const auto cellHeight = (area.getHeight() - (rows - 1) * pedalCellGap) / rows;
+   #else
     auto area = getLocalBounds().reduced(18).withTrimmedTop(70).withTrimmedBottom(12);
     area.removeFromLeft(100); area.removeFromRight(100);
     const int columns = processor.getGridColumns(), rows = processor.getGridRows();
     const auto matrixWidth = columns * pedalCellWidth + (columns - 1) * pedalCellGap;
     const auto matrixHeight = rows * pedalCellHeight + (rows - 1) * pedalCellGap;
     area = area.withSizeKeepingCentre(matrixWidth, matrixHeight);
+    constexpr int cellWidth = pedalCellWidth;
+    constexpr int cellHeight = pedalCellHeight;
+   #endif
     const int capacity = rows * columns;
     slot = juce::jlimit(0, capacity - 1, slot);
     const auto visualIndex = capacity - 1 - slot;
     const auto column = visualIndex % columns, row = visualIndex / columns;
-    return { area.getX() + column * (pedalCellWidth + pedalCellGap),
-             area.getY() + row * (pedalCellHeight + pedalCellGap),
-             pedalCellWidth, pedalCellHeight };
+    return { area.getX() + column * (cellWidth + pedalCellGap),
+             area.getY() + row * (cellHeight + pedalCellGap),
+             cellWidth, cellHeight };
 }
 
 void StompForgeAudioProcessorEditor::resized()
 {
     layoutPedals();
-    auto inputArea = getLocalBounds().removeFromRight(108).withTrimmedTop(75).withTrimmedBottom(20);
-    inputLabel.setBounds(inputArea.removeFromTop(25));
-    inputFader->setBounds(inputArea.reduced(4));
-    auto outputArea = getLocalBounds().removeFromLeft(108).withTrimmedTop(75).withTrimmedBottom(20);
-    outputLabel.setBounds(outputArea.removeFromTop(25));
-    outputFader->setBounds(outputArea.reduced(4));
-    gridButton.setBounds(getWidth() - 96, 20, 70, 34);
+    const auto compact = getHeight() < 600 || getWidth() < 1000;
+    const auto sideWidth = compact ? 64 : 108;
+    const auto top = compact ? 50 : 75;
+    auto inputArea = getLocalBounds().removeFromRight(sideWidth)
+        .withTrimmedTop(top).withTrimmedBottom(compact ? 8 : 20);
+    inputLabel.setBounds(inputArea.removeFromTop(compact ? 18 : 25));
+    inputFader->setBounds(inputArea.reduced(compact ? 1 : 4));
+    auto outputArea = getLocalBounds().removeFromLeft(sideWidth)
+        .withTrimmedTop(top).withTrimmedBottom(compact ? 8 : 20);
+    outputLabel.setBounds(outputArea.removeFromTop(compact ? 18 : 25));
+    outputFader->setBounds(outputArea.reduced(compact ? 1 : 4));
+    gridButton.setBounds(getWidth() - (compact ? 72 : 96), compact ? 8 : 20,
+                         compact ? 60 : 70, compact ? 28 : 34);
+    if (bufferButton.isVisible())
+        bufferButton.setBounds(gridButton.getX() - (compact ? 82 : 104),
+                               compact ? 8 : 20, compact ? 76 : 96, compact ? 28 : 34);
 }

@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "AssetRepository.h"
 
 StompForgeAudioProcessor::StompForgeAudioProcessor()
     : AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
@@ -44,7 +45,7 @@ StompForgeAudioProcessor::StompForgeAudioProcessor()
         *parameters.getRawParameterValue("modelerOutput"), *parameters.getRawParameterValue("modelerMix"),
         *parameters.getRawParameterValue("modelerBypass"));
     modeler = namPlayer.get(); effects[10] = std::move(namPlayer);
-    setPedalOrder({PedalId::gate, PedalId::ds1, PedalId::chorus, PedalId::jcm800,
+    setPedalOrder({PedalId::tuner, PedalId::gate, PedalId::ds1, PedalId::amp5150,
                    PedalId::reverb, PedalId::delay, PedalId::empty, PedalId::empty,
                    PedalId::empty, PedalId::empty, PedalId::empty, PedalId::empty}, true);
 }
@@ -123,10 +124,10 @@ StompForgeAudioProcessor::APVTS::ParameterLayout StompForgeAudioProcessor::creat
     p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"chorusBypass", 1}, "CERES-2 Bypass", false));
     addPercent("reverbSize", "VOID CHAMBER Size", 45.0f); addPercent("reverbDamping", "VOID CHAMBER Damping", 55.0f);
     addPercent("reverbMix", "VOID CHAMBER Mix", 24.0f);
-    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"reverbBypass", 1}, "VOID CHAMBER Bypass", false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"reverbBypass", 1}, "VOID CHAMBER Bypass", true));
     addPercent("delayTime", "PULSAR Time", 28.0f); addPercent("delayFeedback", "PULSAR Feedback", 32.0f);
     addPercent("delayMix", "PULSAR Mix", 22.0f);
-    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"delayBypass", 1}, "PULSAR Bypass", false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"delayBypass", 1}, "PULSAR Bypass", true));
     p.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"tunerBypass", 1}, "LUNER Bypass", false));
     return {p.begin(), p.end()};
 }
@@ -140,6 +141,7 @@ bool StompForgeAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts
 
 void StompForgeAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    modeler->setLinkedChannels(wrapperType == wrapperType_Standalone);
     juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(samplesPerBlock),
                                static_cast<juce::uint32>(getTotalNumOutputChannels())};
     for (auto& effect : effects) effect->prepare(spec);
@@ -220,7 +222,7 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
             if (!savedXml.contains("id=\"" + juce::String(id) + "\""))
                 if (auto* parameter = parameters.getParameter(id))
                     parameter->setValueNotifyingHost(parameter->getDefaultValue());
-        const auto text = parameters.state.getProperty("pedalOrder", "0,1,4,3,5,6").toString();
+        const auto text = parameters.state.getProperty("pedalOrder", "7,0,1,8,5,6").toString();
         juce::StringArray values; values.addTokens(text, ",", "");
         if (values.size() == 6 || values.size() == static_cast<int>(numSlots)) {
             std::array<PedalId, numSlots> restored{};
@@ -229,7 +231,7 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
                 restored[i] = static_cast<PedalId>(values[static_cast<int>(i)].getIntValue());
             setPedalOrder(restored, false);
         } else {
-            setPedalOrder({PedalId::gate, PedalId::ds1, PedalId::chorus, PedalId::jcm800,
+            setPedalOrder({PedalId::tuner, PedalId::gate, PedalId::ds1, PedalId::amp5150,
                            PedalId::reverb, PedalId::delay, PedalId::empty, PedalId::empty,
                            PedalId::empty, PedalId::empty, PedalId::empty, PedalId::empty}, false);
         }
@@ -248,19 +250,27 @@ void StompForgeAudioProcessor::setStateInformation(const void* data, int size)
 bool StompForgeAudioProcessor::loadCabImpulse(const juce::File& source)
 {
     if (impulseCab == nullptr || !source.existsAsFile()) return false;
-    auto cache = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("StompForge").getChildFile("ImpulseResponses");
-    if (cache.createDirectory().failed()) return false;
-    const auto safeName = source.getFileNameWithoutExtension().retainCharacters("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_ ");
-    const auto cached = cache.getChildFile(safeName + "-" + juce::String(source.getSize()) + source.getFileExtension());
-    if (source != cached) {
-        cached.deleteFile();
-        if (!source.copyFileTo(cached)) return false;
-    }
+    juce::String error;
+    const auto cached = stompforge::AssetRepository::importFile(source, "ImpulseResponses", error);
+    if (!cached.existsAsFile()) return false;
     impulseCab->loadImpulse(cached);
     parameters.state.setProperty("irOriginalPath", source.getFullPathName(), nullptr);
     parameters.state.setProperty("irCachedPath", cached.getFullPathName(), nullptr);
     parameters.state.setProperty("irDisplayName", source.getFileNameWithoutExtension(), nullptr);
+    return true;
+}
+
+bool StompForgeAudioProcessor::loadCabImpulse(const juce::URL& source)
+{
+    if (impulseCab == nullptr) return false;
+    juce::String error;
+    const auto cached = stompforge::AssetRepository::importURL(source, "ImpulseResponses", error);
+    if (!cached.existsAsFile()) return false;
+    impulseCab->loadImpulse(cached);
+    parameters.state.setProperty("irOriginalPath", source.toString(false), nullptr);
+    parameters.state.setProperty("irCachedPath", cached.getFullPathName(), nullptr);
+    parameters.state.setProperty("irDisplayName",
+                                 source.getLocalFile().getFileNameWithoutExtension(), nullptr);
     return true;
 }
 
@@ -271,9 +281,32 @@ juce::String StompForgeAudioProcessor::getCabImpulseName() const
 
 bool StompForgeAudioProcessor::loadModelerModel(const juce::File& source, juce::String& error)
 {
-    if (modeler == nullptr || !modeler->loadModel(source, error)) return false;
-    parameters.state.setProperty("modelerPath", source.getFullPathName(), nullptr);
+    if (modeler == nullptr) return false;
+    const auto cached = stompforge::AssetRepository::importFile(source, "NAMModels", error);
+    if (!cached.existsAsFile()) return false;
+    if (!modeler->loadModel(cached, error)) {
+        if (cached != source) cached.deleteFile();
+        return false;
+    }
+    parameters.state.setProperty("modelerOriginalPath", source.getFullPathName(), nullptr);
+    parameters.state.setProperty("modelerPath", cached.getFullPathName(), nullptr);
     parameters.state.setProperty("modelerDisplayName", source.getFileNameWithoutExtension(), nullptr);
+    return true;
+}
+
+bool StompForgeAudioProcessor::loadModelerModel(const juce::URL& source, juce::String& error)
+{
+    if (modeler == nullptr) return false;
+    const auto cached = stompforge::AssetRepository::importURL(source, "NAMModels", error);
+    if (!cached.existsAsFile()) return false;
+    if (!modeler->loadModel(cached, error)) {
+        cached.deleteFile();
+        return false;
+    }
+    parameters.state.setProperty("modelerOriginalPath", source.toString(false), nullptr);
+    parameters.state.setProperty("modelerPath", cached.getFullPathName(), nullptr);
+    parameters.state.setProperty("modelerDisplayName",
+                                 source.getLocalFile().getFileNameWithoutExtension(), nullptr);
     return true;
 }
 

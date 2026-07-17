@@ -1,5 +1,5 @@
 #define AppName "StompForge"
-#define AppVersion "0.0.1"
+#define AppVersion "0.0.2"
 #define AppChannel "alpha"
 #define AppPublisher "Vlodzimej Garlic"
 #define BuildRoot "..\build\StompForge_artefacts\Release"

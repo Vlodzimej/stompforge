@@ -1,4 +1,5 @@
 build/
+build-ios/
 .tools/
 dist/
 .DS_Store
