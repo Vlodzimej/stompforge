@@ -22,7 +22,7 @@ private:
     std::array<std::unique_ptr<PedalCard>, StompForgeAudioProcessor::numEffects> pedals;
     std::array<std::unique_ptr<GridCell>, StompForgeAudioProcessor::numSlots> gridCells;
     std::unique_ptr<LevelFader> inputFader, outputFader;
-    juce::Label inputLabel, outputLabel, latencyLabel;
+    juce::Label inputLabel, outputLabel;
     juce::TextButton gridButton, bufferButton;
     std::unique_ptr<TouchMenuLookAndFeel> touchMenuLookAndFeel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;

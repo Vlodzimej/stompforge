@@ -45,7 +45,7 @@ license files and source are available at the project URL above and in the
 pinned NeuralAmpModelerCore dependency fetched by CMake.
 
 JUCE 8.0.10 is dual-licensed under AGPLv3 and the commercial JUCE 8 licence.
-StompForge 0.0.1-alpha uses JUCE under the AGPLv3 open-source route:
+StompForge 0.0.2-alpha uses JUCE under the AGPLv3 open-source route:
 
 - https://github.com/juce-framework/JUCE/blob/8.0.10/LICENSE.md
 - https://juce.com/legal/juce-8-licence/

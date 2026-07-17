@@ -1,5 +1,7 @@
 # Apple mobile build
 
+[Русский](README.ru.md) | English
+
 StompForge uses the same JUCE processor and editor for the iOS/iPadOS
 standalone app and its embedded AUv3 extension. CMake enables these two targets
 when `CMAKE_SYSTEM_NAME=iOS`; Windows continues to build VST3 and Standalone.
@@ -47,6 +49,10 @@ cmake -S . -B build-ios \
 Building `StompForge_Standalone` also builds and embeds
 `StompForge_AUv3`. CMake generates the app and extension entitlements from the
 shared App Group configuration.
+
+The current mobile UI is landscape-only. MODELER is intentionally unavailable
+on iOS/iPadOS; its pedal remains disabled in the effect menu until the NAM
+backend has a supported mobile integration.
 
 ## Shared assets
 

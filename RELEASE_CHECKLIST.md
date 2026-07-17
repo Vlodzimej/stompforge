@@ -1,4 +1,6 @@
-# StompForge 0.0.1-alpha release checklist
+# StompForge 0.0.2-alpha release checklist
+
+[English](RELEASE_CHECKLIST.en.md)
 
 Дата аудита: 2026-07-17. Этот документ — инженерный checklist, а не юридическая
 консультация.
@@ -19,7 +21,8 @@
 - [x] Если ASIO licence не подтверждена, release пересобран без
   `ASIO_SDK_PATH`.
 
-Для 0.0.1-alpha выбран AGPL-3.0-or-later. Release собирается без ASIO SDK.
+Для 0.0.2-alpha выбран AGPL-3.0-or-later. Публичный release собирается без
+ASIO SDK.
 
 ## 2. Совместимость компонентов
 
@@ -37,33 +40,39 @@
 ## 3. Права на контент
 
 - [ ] Подтверждены права на `Assets/stompforge-icon-source.ai`.
-- [ ] В release не включены сторонние `.nam` или IR без разрешения.
+- [x] В release не включены сторонние `.nam` или IR без разрешения.
 - [x] README сообщает, что пользователь отвечает за лицензии загружаемых
   моделей и impulse response.
 
 ## 4. Техническая проверка
 
-- [x] Чистая Release-конфигурация Windows x64.
-- [x] Собраны VST3 и Standalone.
+- [x] Чистая Release-конфигурация Windows x64 без ASIO SDK.
+- [x] Собраны VST3 и Standalone версии 0.0.2.
 - [x] `StompForgeDspSmokeTest.exe` завершился с кодом 0.
-- [x] Проверена загрузка WaveNet `.nam`.
-- [ ] Проверены mono/stereo, bypass, разные block size и отсутствие NaN/Inf.
+- [x] Проверена загрузка WaveNet `.nam` и linked-channel режим.
+- [x] Проверены mono/stereo, bypass, разные block size и отсутствие NaN/Inf.
 - [x] `git diff --check` не сообщает ошибок.
 - [x] `build/`, `dist/` и `.tools/` не индексируются Git.
+- [x] iOS/iPadOS targets помечены как experimental и не входят в бинарные
+  файлы этого релиза.
 
 ## 5. Упаковка
 
-- [x] Installer собран из `Packaging/StompForge.iss`.
+- [x] Installer собран из `Packaging/StompForge.iss` с помощью Inno Setup 6.7.3.
 - [ ] Установлены VST3 и Standalone на чистой Windows-машине/VM.
 - [ ] Проверено повторное сканирование в поддерживаемой DAW.
-- [x] `THIRD_PARTY_NOTICES.md` установлен рядом со Standalone.
-- [x] Имя installer: `StompForge-0.0.1-alpha-Windows-x64-Setup.exe`.
-- [x] Вычислен SHA-256 installer и опубликован в `SHA256SUMS.txt`.
+- [x] `THIRD_PARTY_NOTICES.md` и `LICENSE` включены в installer и portable
+  package.
+- [x] Имя installer: `StompForge-0.0.2-alpha-Windows-x64-Setup.exe`.
+- [x] Создан portable package
+  `StompForge-0.0.2-alpha-Windows-x64-Portable.zip`.
+- [x] Вычислены SHA-256 и создан `SHA256SUMS.txt`.
 
 ## 6. Публикация
 
-- [x] `CHANGELOG.md` соответствует фактическому содержимому.
-- [ ] Создан подписанный или annotated tag `v0.0.1-alpha`.
+- [x] Русская и английская документация соответствует фактическому содержимому.
+- [x] `CHANGELOG.md` и `CHANGELOG.en.md` соответствуют release notes.
+- [ ] Создан annotated tag `v0.0.2-alpha`.
 - [ ] GitHub Release помечен как pre-release.
 - [ ] Приложены installer, portable VST3 archive, checksum и known limitations.
 - [ ] Сохранена копия исходников, соответствующая опубликованным бинарникам.

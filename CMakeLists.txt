@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(StompForge VERSION 0.0.1 LANGUAGES C CXX)
+project(StompForge VERSION 0.0.2 LANGUAGES C CXX)
 if (POLICY CMP0169)
     cmake_policy(SET CMP0169 OLD)
 endif()

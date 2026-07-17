@@ -5,6 +5,13 @@ Keep a Changelog; версия продукта следует Semantic Versioni
 
 ## [Unreleased]
 
+Пока нет изменений.
+
+## [0.0.2-alpha] — 2026-07-17
+
+Второй alpha-выпуск развивает кроссплатформенную архитектуру и управление на
+сенсорных устройствах. Числовая версия бинарников и установщика — `0.0.2`.
+
 ### Добавлено
 
 - CMake-конфигурация iOS/iPadOS для Standalone-приложения и встроенного
@@ -13,6 +20,30 @@ Keep a Changelog; версия продукта следует Semantic Versioni
   AUv3; на остальных платформах используется управляемый каталог StompForge.
 - Инструкция Apple mobile build с параметрами подписи и отдельными release
   gates.
+- Touch-oriented меню эффектов, адаптивная pedalboard grid и landscape layout
+  для iPhone/iPad.
+- Выбор buffer size и сохранение Standalone-состояния на iOS/iPadOS.
+- Тест linked-channel обработки NAM в Standalone.
+
+### Изменено
+
+- Цепочка по умолчанию начинается с LUNER, STARGATE, DEIMOS-1 и VULCAN-5;
+  VOID CHAMBER и PULSAR по умолчанию находятся в bypass.
+- В Standalone одна NAM-модель обрабатывает общий mono-вход и передаёт
+  результат в оба выходных канала.
+- Подписи параметров педалей приведены в соответствие с назначением controls.
+- MODELER явно недоступен на iOS/iPadOS до появления поддерживаемого mobile
+  backend.
+- Из интерфейса удалена расчётная надпись `LATENCY`; выбор buffer size
+  сохранён.
+
+### Исправлено
+
+- Исправлено чтение security-scoped файлов через URL и импорт в управляемое
+  хранилище.
+- Добавлены проверки конечности NAM output и безопасная работа с отсутствующим
+  channel model.
+- Исправлена Windows-компиляция platform guard `JUCE_IOS`.
 
 ## [0.0.1-alpha] — 2026-07-17
 

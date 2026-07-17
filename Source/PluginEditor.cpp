@@ -846,11 +846,6 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
     gridButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffffc77d));
     gridButton.onClick = [this] { showGridSelector(); };
     addAndMakeVisible(gridButton);
-    latencyLabel.setJustificationType(juce::Justification::centredRight);
-    latencyLabel.setColour(juce::Label::textColourId, juce::Colour(0xffaeb2bb));
-    latencyLabel.setFont(juce::FontOptions(12.0f));
-    latencyLabel.setText("LATENCY --", juce::dontSendNotification);
-    addAndMakeVisible(latencyLabel);
    #if JUCE_IOS && JucePlugin_Build_Standalone
     if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone) {
         bufferButton.setButtonText("BUFFER");
@@ -951,9 +946,13 @@ void StompForgeAudioProcessorEditor::showEffectMenu(int slot)
                  true, false, makeMenuIcon(MenuIcon::amp));
     amps.addItem(static_cast<int>(Id::amp5150) + 1, "VULCAN-5",
                  true, false, makeMenuIcon(MenuIcon::cab));
-    amps.addItem(static_cast<int>(Id::modeler) + 1,
-                JUCE_IOS ? "MODELER (UNAVAILABLE ON IOS)" : "MODELER",
-                !JUCE_IOS, false, makeMenuIcon(MenuIcon::modeler));
+   #if JUCE_IOS
+    amps.addItem(static_cast<int>(Id::modeler) + 1, "MODELER (UNAVAILABLE ON IOS)",
+                 false, false, makeMenuIcon(MenuIcon::modeler));
+   #else
+    amps.addItem(static_cast<int>(Id::modeler) + 1, "MODELER",
+                 true, false, makeMenuIcon(MenuIcon::modeler));
+   #endif
     menu.addSubMenu("AMP", amps, true, makeMenuIcon(MenuIcon::amp));
     menu.addSubMenu("REVERB", item(Id::reverb, MenuIcon::reverb, "VOID CHAMBER"),
                     true, makeMenuIcon(MenuIcon::reverb));
@@ -999,24 +998,12 @@ void StompForgeAudioProcessorEditor::timerCallback()
         persistenceTimerTicks = 0;
         persistStandaloneStateIfChanged(false);
     }
-    double latencyMilliseconds = 0.0;
    #if JUCE_IOS && JucePlugin_Build_Standalone
     if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone)
         if (auto* holder = juce::StandalonePluginHolder::getInstance())
-            if (auto* device = holder->deviceManager.getCurrentAudioDevice()) {
+            if (auto* device = holder->deviceManager.getCurrentAudioDevice())
                 bufferButton.setButtonText("BUF " + juce::String(device->getCurrentBufferSizeSamples()));
-                const auto latencySamples = device->getInputLatencyInSamples()
-                    + device->getOutputLatencyInSamples()
-                    + device->getCurrentBufferSizeSamples()
-                    + processor.getLatencySamples();
-                if (device->getCurrentSampleRate() > 0.0)
-                    latencyMilliseconds = 1000.0 * latencySamples / device->getCurrentSampleRate();
-            }
    #endif
-    latencyLabel.setText(latencyMilliseconds > 0.0
-            ? "LATENCY " + juce::String(latencyMilliseconds, 1) + " ms"
-            : "LATENCY --",
-        juce::dontSendNotification);
     if (pedals[static_cast<size_t>(StompForgeAudioProcessor::PedalId::tuner)]->isVisible())
         pedals[static_cast<size_t>(StompForgeAudioProcessor::PedalId::tuner)]->repaint();
 }
@@ -1233,9 +1220,7 @@ void StompForgeAudioProcessorEditor::resized()
     outputFader->setBounds(outputArea.reduced(compact ? 1 : 4));
     gridButton.setBounds(getWidth() - (compact ? 72 : 96), compact ? 8 : 20,
                          compact ? 60 : 70, compact ? 28 : 34);
-    latencyLabel.setBounds(gridButton.getX() - (compact ? 124 : 150),
-                           compact ? 8 : 20, compact ? 116 : 140, compact ? 28 : 34);
     if (bufferButton.isVisible())
-        bufferButton.setBounds(latencyLabel.getX() - (compact ? 82 : 104),
+        bufferButton.setBounds(gridButton.getX() - (compact ? 82 : 104),
                                compact ? 8 : 20, compact ? 76 : 96, compact ? 28 : 34);
 }
