@@ -48,13 +48,19 @@ public:
     int getGridRows() const noexcept;
     int getGridColumns() const noexcept;
     bool setGridSize(int rows, int columns);
+    bool isImpulseActive() const noexcept { return impulseActive.load(std::memory_order_acquire); }
+    float consumeInputLevel() noexcept { return inputLevel.exchange(0.0f, std::memory_order_relaxed); }
+    float consumeOutputLevel() noexcept { return outputLevel.exchange(0.0f, std::memory_order_relaxed); }
 
 private:
     std::array<std::unique_ptr<EffectModule>, numEffects> effects;
+    std::atomic<bool> impulseActive { false };
     LunerEffect* luner = nullptr;
     ImpulseCabEffect* impulseCab = nullptr;
     std::atomic<juce::uint64> packedOrder { 0u };
     juce::LinearSmoothedValue<float> inputGain, outputGain;
+    std::atomic<float> inputLevel { 0.0f }, outputLevel { 0.0f };
+    static void publishLevel(std::atomic<float>& destination, float level) noexcept;
     static juce::uint64 packOrder(const std::array<PedalId, numSlots>&) noexcept;
     void setPedalOrder(const std::array<PedalId, numSlots>&, bool saveToState);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StompForgeAudioProcessor)

@@ -111,7 +111,96 @@ private:
     int hoveredRows = 0, hoveredColumns = 0;
     std::function<void(int, int)> onSelected;
 };
+
+void configureParameterSlider(juce::Slider& slider, const juce::String& parameterId, juce::Colour colour)
+{
+    configureKnob(slider, colour);
+    if (parameterId == "5150Channel") slider.setTextValueSuffix({});
+    else if (parameterId == "irLowCut" || parameterId == "irHighCut") slider.setTextValueSuffix(" Hz");
+    else if (parameterId == "mix" || parameterId == "irMix" || parameterId.startsWith("ds1")
+        || parameterId.startsWith("chorus") || parameterId.startsWith("reverb")
+        || parameterId.startsWith("delay") || parameterId.startsWith("jcm")
+        || (parameterId.startsWith("5150") && parameterId != "5150Channel")) slider.setTextValueSuffix(" %");
+    else slider.setTextValueSuffix(" dB");
 }
+
+class AdvancedControls final : public juce::Component
+{
+public:
+    AdvancedControls(StompForgeAudioProcessor::APVTS& state, juce::Colour colour,
+                     const std::vector<juce::String>& ids, const std::vector<juce::String>& names)
+    {
+        for (size_t i = 3; i < ids.size(); ++i) {
+            auto slider = std::make_unique<juce::Slider>();
+            configureParameterSlider(*slider, ids[i], colour); addAndMakeVisible(*slider);
+            attachments.push_back(std::make_unique<SliderAttachment>(state, ids[i], *slider));
+            sliders.push_back(std::move(slider));
+            auto label = std::make_unique<juce::Label>();
+            label->setText(names[i], juce::dontSendNotification);
+            label->setJustificationType(juce::Justification::centred);
+            label->setColour(juce::Label::textColourId, juce::Colour(0xfff8efd8));
+            addAndMakeVisible(*label); labels.push_back(std::move(label));
+        }
+        const auto columns = juce::jmin(3, static_cast<int>(sliders.size()));
+        const auto rows = (static_cast<int>(sliders.size()) + columns - 1) / columns;
+        setSize(columns * 150 + 28, rows * 150 + 28);
+    }
+    void paint(juce::Graphics& g) override { g.fillAll(juce::Colour(0xff15181e)); }
+    void resized() override
+    {
+        auto area = getLocalBounds().reduced(14);
+        const auto columns = juce::jmin(3, static_cast<int>(sliders.size()));
+        const auto rows = (static_cast<int>(sliders.size()) + columns - 1) / columns;
+        const auto width = area.getWidth() / columns, height = area.getHeight() / rows;
+        for (size_t i = 0; i < sliders.size(); ++i) {
+            auto cell = juce::Rectangle<int>(area.getX() + static_cast<int>(i) % columns * width,
+                area.getY() + static_cast<int>(i) / columns * height, width, height);
+            labels[i]->setBounds(cell.removeFromTop(22)); sliders[i]->setBounds(cell.reduced(3));
+        }
+    }
+private:
+    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    std::vector<std::unique_ptr<juce::Slider>> sliders;
+    std::vector<std::unique_ptr<juce::Label>> labels;
+    std::vector<std::unique_ptr<SliderAttachment>> attachments;
+};
+}
+
+class StompForgeAudioProcessorEditor::LevelFader final : public juce::Slider
+{
+public:
+    explicit LevelFader(juce::Colour accent) : colour(accent)
+    {
+        setSliderStyle(juce::Slider::LinearVertical);
+        setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        setTextValueSuffix(" dB");
+    }
+    void setSignalLevel(float linear)
+    {
+        const auto target = juce::jlimit(0.0f, 1.0f,
+            juce::jmap(juce::Decibels::gainToDecibels(linear, -60.0f), -60.0f, 0.0f, 0.0f, 1.0f));
+        level = target >= level ? target : level * 0.82f; repaint();
+    }
+    void paint(juce::Graphics& g) override
+    {
+        auto track = getLocalBounds().toFloat().reduced(25.0f, 5.0f); track.removeFromBottom(25.0f);
+        g.setColour(juce::Colour(0xff20242b)); g.fillRoundedRectangle(track, 8.0f);
+        auto fill = track.withTop(track.getBottom() - track.getHeight() * level);
+        juce::ColourGradient gradient(juce::Colour(0xffff5048), fill.getX(), track.getY(),
+            colour.brighter(0.35f), fill.getX(), track.getBottom(), false);
+        g.setGradientFill(gradient); g.fillRoundedRectangle(fill, 7.0f);
+        const auto y = track.getBottom() - static_cast<float>(valueToProportionOfLength(getValue())) * track.getHeight();
+        g.setColour(juce::Colour(0xffffe0a3));
+        g.fillRoundedRectangle(track.getX() - 6.0f, y - 3.0f, track.getWidth() + 12.0f, 6.0f, 3.0f);
+        g.setColour(juce::Colour(0x45000000));
+        g.fillRoundedRectangle(4.0f, static_cast<float>(getHeight() - 21), static_cast<float>(getWidth() - 8), 19.0f, 4.0f);
+        g.setColour(juce::Colours::white); g.setFont(juce::FontOptions(12.0f));
+        g.drawText(getTextFromValue(getValue()), 4, getHeight() - 22, getWidth() - 8, 20, juce::Justification::centred);
+    }
+private:
+    juce::Colour colour;
+    float level = 0.0f;
+};
 
 class StompForgeAudioProcessorEditor::PedalCard final : public juce::Component,
                                                           public juce::DragAndDropTarget,
@@ -128,32 +217,31 @@ public:
         : editor(owner), id(pedalId), name(std::move(pedalName)), colour(pedalColour),
           tunerDisplay(showTuner), impulseLoader(showImpulseLoader)
     {
-        const std::vector<const char*> ids(parameterIds);
-        const std::vector<const char*> names(parameterNames);
-        for (size_t i = 0; i < ids.size(); ++i) {
+        for (auto* value : parameterIds) allIds.emplace_back(value);
+        for (auto* value : parameterNames) allNames.emplace_back(value);
+        const auto visibleCount = juce::jmin<size_t>(3, allIds.size());
+        for (size_t i = 0; i < visibleCount; ++i) {
             auto knob = std::make_unique<juce::Slider>();
-            configureKnob(*knob, colour);
-            const juce::String parameterId(ids[i]);
-            if (parameterId == "irLowCut" || parameterId == "irHighCut")
-                knob->setTextValueSuffix(" Hz");
-            else if (parameterId == "mix" || parameterId == "irMix" || parameterId.startsWith("ds1")
-                || parameterId.startsWith("chorus") || parameterId.startsWith("reverb")
-                || parameterId.startsWith("delay") || parameterId.startsWith("jcm")
-                || (parameterId.startsWith("5150") && parameterId != "5150Channel"))
-                knob->setTextValueSuffix(" %");
-            else knob->setTextValueSuffix(" dB");
+            configureParameterSlider(*knob, allIds[i], colour);
             addAndMakeVisible(*knob);
             knob->addMouseListener(this, false);
-            attachments.push_back(std::make_unique<SliderAttachment>(editor.processor.parameters, ids[i], *knob));
+            attachments.push_back(std::make_unique<SliderAttachment>(editor.processor.parameters, allIds[i], *knob));
             knobs.push_back(std::move(knob));
 
             auto label = std::make_unique<juce::Label>();
-            label->setText(names[i], juce::dontSendNotification);
+            label->setText(allNames[i], juce::dontSendNotification);
             label->setJustificationType(juce::Justification::centred);
             label->setColour(juce::Label::textColourId, juce::Colour(0xfff8efd8));
             addAndMakeVisible(*label);
             label->addMouseListener(this, false);
             labels.push_back(std::move(label));
+        }
+        if (allIds.size() > 3) {
+            more.setButtonText("MORE");
+            more.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292d35));
+            more.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffffd28c));
+            more.onClick = [this] { showAdvancedControls(); };
+            addAndMakeVisible(more); more.addMouseListener(this, false);
         }
 
         bypass.setButtonText("ON");
@@ -179,7 +267,25 @@ public:
             option.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffc08b32));
             addAndMakeVisible(option);
             option.addMouseListener(this, false);
-            optionAttachment = std::make_unique<ButtonAttachment>(editor.processor.parameters, optionId, option);
+            if (auto* parameter = editor.processor.parameters.getParameter(optionId)) {
+                optionAttachment = std::make_unique<juce::ParameterAttachment>(*parameter,
+                    [this] (float value) {
+                        option.setToggleState(value >= 0.5f && !editor.processor.isImpulseActive(),
+                                              juce::dontSendNotification);
+                    }, nullptr);
+                option.onClick = [this] {
+                    if (option.getToggleState() && editor.processor.isImpulseActive()) {
+                        option.setToggleState(false, juce::dontSendNotification);
+                        juce::AlertWindow::showMessageBoxAsync(
+                            juce::MessageBoxIconType::WarningIcon,
+                            "CABSIM is unavailable",
+                            "Remove IMPULSE from the pedalboard before enabling an amp CABSIM.");
+                        return;
+                    }
+                    optionAttachment->setValueAsCompleteGesture(option.getToggleState() ? 1.0f : 0.0f);
+                };
+                optionAttachment->sendInitialUpdate();
+            }
         }
         if (impulseLoader) {
             loadImpulse.setButtonText("LOAD IR");
@@ -316,16 +422,32 @@ public:
             knobs[i]->setBounds(cell.reduced(1));
         }
         const auto hasOption = optionAttachment != nullptr || impulseLoader;
-        bypass.setBounds(hasOption ? getWidth() / 2 - 78 : getWidth() / 2 - 37, getHeight() - 62, 74, 38);
-        if (hasOption) option.setBounds(getWidth() / 2 + 4, getHeight() - 62, 82, 38);
+        const auto hasMore = allIds.size() > 3;
+        const auto buttonCount = 1 + static_cast<int>(hasOption) + static_cast<int>(hasMore);
+        const auto buttonWidth = 74, gap = 8;
+        auto x = (getWidth() - (buttonCount * buttonWidth + (buttonCount - 1) * gap)) / 2;
+        bypass.setBounds(x, getHeight() - 62, buttonWidth, 38); x += buttonWidth + gap;
+        if (hasOption) option.setBounds(x, getHeight() - 62, buttonWidth, 38), x += buttonWidth + gap;
+        if (hasMore) more.setBounds(x, getHeight() - 62, buttonWidth, 38);
         if (impulseLoader) {
             option.setVisible(false);
-            loadImpulse.setBounds(getWidth() / 2 + 4, getHeight() - 62, 82, 38);
+            loadImpulse.setBounds(option.getBounds());
             impulseName.setBounds(16, 48, getWidth() - 32, 18);
         }
     }
 
 private:
+    void showAdvancedControls()
+    {
+        juce::DialogWindow::LaunchOptions options;
+        options.dialogTitle = name + " — Advanced controls";
+        options.dialogBackgroundColour = juce::Colour(0xff15181e);
+        options.escapeKeyTriggersCloseButton = true;
+        options.useNativeTitleBar = true;
+        options.resizable = false;
+        options.content.setOwned(new AdvancedControls(editor.processor.parameters, colour, allIds, allNames));
+        options.launchAsync();
+    }
     void timerCallback() override
     {
         stopTimer();
@@ -333,7 +455,6 @@ private:
     }
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     StompForgeAudioProcessorEditor& editor;
     StompForgeAudioProcessor::PedalId id;
     juce::String name;
@@ -341,10 +462,12 @@ private:
     std::vector<std::unique_ptr<juce::Slider>> knobs;
     std::vector<std::unique_ptr<juce::Label>> labels;
     std::vector<std::unique_ptr<SliderAttachment>> attachments;
+    std::vector<juce::String> allIds, allNames;
     juce::TextButton bypass;
     std::unique_ptr<juce::ParameterAttachment> bypassAttachment;
     juce::TextButton option;
-    std::unique_ptr<ButtonAttachment> optionAttachment;
+    juce::TextButton more;
+    std::unique_ptr<juce::ParameterAttachment> optionAttachment;
     juce::TextButton loadImpulse;
     juce::Label impulseName;
     std::unique_ptr<juce::FileChooser> chooser;
@@ -424,8 +547,8 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
         std::initializer_list<const char*>{"BASS", "MID", "TREBLE"}, "toneBypass");
     pedals[3] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::jcm800,
         "MARS-8", juce::Colour(0xff5b431d),
-        std::initializer_list<const char*>{"jcmPreamp", "jcmBass", "jcmMiddle", "jcmTreble", "jcmMaster", "jcmPresence", "jcmSag"},
-        std::initializer_list<const char*>{"PREAMP", "BASS", "MIDDLE", "TREBLE", "MASTER", "PRESENCE", "SAG"},
+        std::initializer_list<const char*>{"jcmPreamp", "jcmMaster", "jcmPresence", "jcmBass", "jcmMiddle", "jcmTreble", "jcmSag"},
+        std::initializer_list<const char*>{"PREAMP", "MASTER", "PRESENCE", "BASS", "MIDDLE", "TREBLE", "SAG"},
         "jcmBypass", "jcmCab");
     pedals[4] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::chorus,
         "CERES-2", juce::Colour(0xff3f83a6),
@@ -444,34 +567,32 @@ StompForgeAudioProcessorEditor::StompForgeAudioProcessorEditor(StompForgeAudioPr
         std::initializer_list<const char*>{}, "tunerBypass", nullptr, true);
     pedals[8] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::amp5150,
         "VULCAN-5", juce::Colour(0xff6f2020),
-        std::initializer_list<const char*>{"5150Channel", "5150Gain", "5150Bass", "5150Middle", "5150Treble", "5150Master", "5150Presence", "5150Resonance", "5150Bias", "5150Sag"},
-        std::initializer_list<const char*>{"CHANNEL", "GAIN", "BASS", "MIDDLE", "TREBLE", "MASTER", "PRESENCE", "RESONANCE", "BIAS", "SUPPLY"},
+        std::initializer_list<const char*>{"5150Channel", "5150Gain", "5150Master", "5150Bass", "5150Middle", "5150Treble", "5150Presence", "5150Resonance", "5150Bias", "5150Sag"},
+        std::initializer_list<const char*>{"CHANNEL", "GAIN", "MASTER", "BASS", "MIDDLE", "TREBLE", "PRESENCE", "RESONANCE", "BIAS", "SUPPLY"},
         "5150Bypass", "5150Cab");
     pedals[9] = std::make_unique<PedalCard>(*this, StompForgeAudioProcessor::PedalId::impulseCab,
         "IMPULSE", juce::Colour(0xff28576b),
-        std::initializer_list<const char*>{"irLevel", "irLowCut", "irHighCut", "irMix"},
-        std::initializer_list<const char*>{"LEVEL", "LOW CUT", "HIGH CUT", "MIX"},
+        std::initializer_list<const char*>{"irLevel", "irMix", "irLowCut", "irHighCut"},
+        std::initializer_list<const char*>{"LEVEL", "MIX", "LOW CUT", "HIGH CUT"},
         "irBypass", nullptr, false, true);
     for (auto& cell : gridCells) { cell = std::make_unique<GridCell>(*this); addAndMakeVisible(*cell); }
     for (auto& pedal : pedals) addAndMakeVisible(*pedal);
 
-    configureKnob(inputKnob, juce::Colour(0xffef554f));
-    inputKnob.setTextValueSuffix(" dB");
-    addAndMakeVisible(inputKnob);
+    inputFader = std::make_unique<LevelFader>(juce::Colour(0xffef554f));
+    addAndMakeVisible(*inputFader);
     inputLabel.setText("INPUT", juce::dontSendNotification);
     inputLabel.setJustificationType(juce::Justification::centred);
     inputLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(inputLabel);
-    inputAttachment = std::make_unique<SliderAttachment>(processor.parameters, "input", inputKnob);
+    inputAttachment = std::make_unique<SliderAttachment>(processor.parameters, "input", *inputFader);
 
-    configureKnob(outputKnob, juce::Colour(0xffffa62b));
-    outputKnob.setTextValueSuffix(" dB");
-    addAndMakeVisible(outputKnob);
+    outputFader = std::make_unique<LevelFader>(juce::Colour(0xffffa62b));
+    addAndMakeVisible(*outputFader);
     outputLabel.setText("OUTPUT", juce::dontSendNotification);
     outputLabel.setJustificationType(juce::Justification::centred);
     outputLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(outputLabel);
-    outputAttachment = std::make_unique<SliderAttachment>(processor.parameters, "output", outputKnob);
+    outputAttachment = std::make_unique<SliderAttachment>(processor.parameters, "output", *outputFader);
     gridButton.setButtonText("GRID");
     gridButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292d35));
     gridButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffffc77d));
@@ -542,6 +663,8 @@ void StompForgeAudioProcessorEditor::showEffectMenu(int slot)
 
 void StompForgeAudioProcessorEditor::timerCallback()
 {
+    inputFader->setSignalLevel(processor.consumeInputLevel());
+    outputFader->setSignalLevel(processor.consumeOutputLevel());
     if (pedals[static_cast<size_t>(StompForgeAudioProcessor::PedalId::tuner)]->isVisible())
         pedals[static_cast<size_t>(StompForgeAudioProcessor::PedalId::tuner)]->repaint();
 }
@@ -593,20 +716,20 @@ void StompForgeAudioProcessorEditor::paint(juce::Graphics& g)
         auto appendRoundedRoute = [&signalPath] (juce::Point<float> from, juce::Point<float> to) {
             signalPath.lineTo(from);
             const juce::Point<float> delta { to.x - from.x, to.y - from.y };
-            if (std::abs(delta.x) < 1.0f || std::abs(delta.y) < 1.0f
-                || std::abs(std::abs(delta.x) - std::abs(delta.y)) < 2.0f) {
+            if (std::abs(delta.x) < 1.0f || std::abs(delta.y) < 1.0f) {
                 signalPath.lineTo(to); return;
             }
-            const auto midX = (from.x + to.x) * 0.5f;
-            const auto firstDirection = midX >= from.x ? 1.0f : -1.0f;
             const auto verticalDirection = to.y >= from.y ? 1.0f : -1.0f;
-            const auto lastDirection = to.x >= midX ? 1.0f : -1.0f;
-            const auto radius = juce::jmin(18.0f, std::abs(to.y - from.y) * 0.25f,
-                                           juce::jmax(4.0f, std::abs(midX - from.x) * 0.45f));
-            signalPath.lineTo(midX - firstDirection * radius, from.y);
-            signalPath.quadraticTo(midX, from.y, midX, from.y + verticalDirection * radius);
-            signalPath.lineTo(midX, to.y - verticalDirection * radius);
-            signalPath.quadraticTo(midX, to.y, midX + lastDirection * radius, to.y);
+            const auto horizontalDirection = to.x >= from.x ? 1.0f : -1.0f;
+            const auto midY = (from.y + to.y) * 0.5f;
+            const auto radius = juce::jmin(18.0f, std::abs(midY - from.y) * 0.45f,
+                                           juce::jmax(4.0f, std::abs(to.x - from.x) * 0.25f));
+            signalPath.lineTo(from.x, midY - verticalDirection * radius);
+            signalPath.quadraticTo(from.x, midY,
+                                   from.x + horizontalDirection * radius, midY);
+            signalPath.lineTo(to.x - horizontalDirection * radius, midY);
+            signalPath.quadraticTo(to.x, midY,
+                                   to.x, midY + verticalDirection * radius);
             signalPath.lineTo(to);
         };
         for (size_t i = 1; i < routePoints.size(); ++i)
@@ -617,13 +740,18 @@ void StompForgeAudioProcessorEditor::paint(juce::Graphics& g)
         for (size_t i = 1; i < routePoints.size(); ++i) {
             juce::Point<float> direction { routePoints[i].x - routePoints[i - 1].x,
                                            routePoints[i].y - routePoints[i - 1].y };
+            juce::Point<float> tip {
+                routePoints[i - 1].x + direction.x * 0.62f,
+                routePoints[i - 1].y + direction.y * 0.62f };
+            if (std::abs(direction.x) >= 1.0f && std::abs(direction.y) >= 1.0f) {
+                direction = { direction.x >= 0.0f ? 1.0f : -1.0f, 0.0f };
+                tip = { (routePoints[i - 1].x + routePoints[i].x) * 0.5f,
+                        (routePoints[i - 1].y + routePoints[i].y) * 0.5f };
+            }
             const auto length = direction.getDistanceFromOrigin();
             if (length < 1.0f) continue;
             direction /= length;
             const juce::Point<float> normal { -direction.y, direction.x };
-            const juce::Point<float> tip {
-                routePoints[i - 1].x + (routePoints[i].x - routePoints[i - 1].x) * 0.62f,
-                routePoints[i - 1].y + (routePoints[i].y - routePoints[i - 1].y) * 0.62f };
             juce::Path arrow; arrow.startNewSubPath(tip);
             arrow.lineTo(tip.x - direction.x * 10.0f + normal.x * 5.0f,
                          tip.y - direction.y * 10.0f + normal.y * 5.0f);
@@ -720,9 +848,9 @@ void StompForgeAudioProcessorEditor::resized()
     layoutPedals();
     auto inputArea = getLocalBounds().removeFromRight(108).withTrimmedTop(75).withTrimmedBottom(20);
     inputLabel.setBounds(inputArea.removeFromTop(25));
-    inputKnob.setBounds(inputArea.reduced(4));
+    inputFader->setBounds(inputArea.reduced(4));
     auto outputArea = getLocalBounds().removeFromLeft(108).withTrimmedTop(75).withTrimmedBottom(20);
     outputLabel.setBounds(outputArea.removeFromTop(25));
-    outputKnob.setBounds(outputArea.reduced(4));
+    outputFader->setBounds(outputArea.reduced(4));
     gridButton.setBounds(getWidth() - 96, 20, 70, 34);
 }

@@ -197,10 +197,10 @@ void FrequencyEffect::process(juce::AudioBuffer<float>& buffer)
 Mars8Effect::Mars8Effect(std::atomic<float>& pre, std::atomic<float>& bass,
     std::atomic<float>& mid, std::atomic<float>& treble, std::atomic<float>& master,
     std::atomic<float>& presence, std::atomic<float>& sag, std::atomic<float>& cab,
-    std::atomic<float>& bypass)
+    std::atomic<float>& bypass, std::atomic<bool>* cabSuppressed)
     : preampParam(pre), bassParam(bass), middleParam(mid), trebleParam(treble),
       masterParam(master), presenceParam(presence), sagParam(sag),
-      cabEnabledParam(cab), bypassParam(bypass) {}
+      cabEnabledParam(cab), bypassParam(bypass), cabSuppressedParam(cabSuppressed) {}
 
 void Mars8Effect::prepare(const juce::dsp::ProcessSpec& spec)
 {
@@ -269,7 +269,8 @@ void Mars8Effect::process(juce::AudioBuffer<float>& buffer)
     juce::dsp::AudioBlock<float> base(buffer); auto block = oversampling->processSamplesUp(base);
     const auto pre = preampParam.load() * 0.01f, master = masterParam.load() * 0.01f;
     const auto sagDepth = sagParam.load() * 0.01f;
-    const auto cab = cabEnabledParam.load() >= 0.5f;
+    const auto cab = cabEnabledParam.load() >= 0.5f
+        && (cabSuppressedParam == nullptr || !cabSuppressedParam->load(std::memory_order_relaxed));
     const auto attack = std::exp(-1.0f / static_cast<float>(0.012 * highRate));
     const auto release = std::exp(-1.0f / static_cast<float>(0.18 * highRate));
     auto couple = [this] (float value, size_t stage, size_t channel) noexcept {
@@ -328,11 +329,11 @@ Vulcan5Effect::Vulcan5Effect(std::atomic<float>& channel, std::atomic<float>& ga
     std::atomic<float>& bass, std::atomic<float>& middle, std::atomic<float>& treble,
     std::atomic<float>& master, std::atomic<float>& presence, std::atomic<float>& resonance,
     std::atomic<float>& bias, std::atomic<float>& sag, std::atomic<float>& cab,
-    std::atomic<float>& bypass)
+    std::atomic<float>& bypass, std::atomic<bool>* cabSuppressed)
     : channelParam(channel), gainParam(gain), bassParam(bass), middleParam(middle),
       trebleParam(treble), masterParam(master), presenceParam(presence),
       resonanceParam(resonance), biasParam(bias), sagParam(sag),
-      cabEnabledParam(cab), bypassParam(bypass) {}
+      cabEnabledParam(cab), bypassParam(bypass), cabSuppressedParam(cabSuppressed) {}
 
 void Vulcan5Effect::prepare(const juce::dsp::ProcessSpec& spec)
 {
@@ -421,7 +422,8 @@ void Vulcan5Effect::process(juce::AudioBuffer<float>& buffer)
     const auto master = juce::jlimit(0.0f, 1.0f, masterParam.load() * 0.01f);
     const auto bias = juce::jlimit(0.0f, 1.0f, biasParam.load() * 0.01f);
     const auto sag = juce::jlimit(0.0f, 1.0f, sagParam.load() * 0.01f);
-    const auto cab = cabEnabledParam.load() >= 0.5f;
+    const auto cab = cabEnabledParam.load() >= 0.5f
+        && (cabSuppressedParam == nullptr || !cabSuppressedParam->load(std::memory_order_relaxed));
     const auto attack = std::exp(-1.0f / static_cast<float>(0.006 * highRate));
     const auto release = std::exp(-1.0f / static_cast<float>(0.24 * highRate));
     auto couple = [this] (float value, size_t stage, size_t channelIndex) noexcept {

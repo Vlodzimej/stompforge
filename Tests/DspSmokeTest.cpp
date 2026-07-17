@@ -30,12 +30,13 @@ int main()
 
     std::atomic<float> pre{65}, bass{55}, mid{65}, treble{55}, master{55};
     std::atomic<float> presence{50}, sag{45}, cab{1};
-    Mars8Effect amp(pre, bass, mid, treble, master, presence, sag, cab, off); amp.prepare(spec);
+    std::atomic<bool> cabSuppressed{false};
+    Mars8Effect amp(pre, bass, mid, treble, master, presence, sag, cab, off, &cabSuppressed); amp.prepare(spec);
     auto b = makeSignal(); amp.process(b);
     std::atomic<float> ampChannel{2}, ampGain{68}, ampBass{48}, ampMid{42}, ampTreble{58};
     std::atomic<float> ampMaster{52}, ampPresence{55}, resonance{58}, bias{22}, supply{35};
     Vulcan5Effect vulcan(ampChannel, ampGain, ampBass, ampMid, ampTreble, ampMaster,
-        ampPresence, resonance, bias, supply, cab, off); vulcan.prepare(spec);
+        ampPresence, resonance, bias, supply, cab, off, &cabSuppressed); vulcan.prepare(spec);
     auto c = makeSignal(); vulcan.process(c);
     std::atomic<float> irLevel{0}, irLowCut{20}, irHighCut{22000}, irMix{100};
     ImpulseCabEffect impulse(irLevel, irLowCut, irHighCut, irMix, off);
@@ -96,9 +97,9 @@ int main()
     juce::dsp::ProcessSpec shortSpec { 44100.0, 32, 2 };
     Deimos1Effect shortDs1(dist, tone, level, off); shortDs1.prepare(shortSpec);
     Ceres2Effect shortCeres(chorusRate, chorusDepth, chorusMix, off); shortCeres.prepare(shortSpec);
-    Mars8Effect shortAmp(pre, bass, mid, treble, master, presence, sag, cab, off); shortAmp.prepare(shortSpec);
+    Mars8Effect shortAmp(pre, bass, mid, treble, master, presence, sag, cab, off, &cabSuppressed); shortAmp.prepare(shortSpec);
     Vulcan5Effect shortVulcan(ampChannel, ampGain, ampBass, ampMid, ampTreble, ampMaster,
-        ampPresence, resonance, bias, supply, cab, off); shortVulcan.prepare(shortSpec);
+        ampPresence, resonance, bias, supply, cab, off, &cabSuppressed); shortVulcan.prepare(shortSpec);
     const auto started = std::chrono::steady_clock::now();
     constexpr int numBlocks = 4096;
     float minimumBlockRms = std::numeric_limits<float>::max();

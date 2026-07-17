@@ -16,7 +16,8 @@ StompForgeAudioProcessor::StompForgeAudioProcessor()
         *parameters.getRawParameterValue("jcmBass"), *parameters.getRawParameterValue("jcmMiddle"),
         *parameters.getRawParameterValue("jcmTreble"), *parameters.getRawParameterValue("jcmMaster"),
         *parameters.getRawParameterValue("jcmPresence"), *parameters.getRawParameterValue("jcmSag"),
-        *parameters.getRawParameterValue("jcmCab"), *parameters.getRawParameterValue("jcmBypass"));
+        *parameters.getRawParameterValue("jcmCab"), *parameters.getRawParameterValue("jcmBypass"),
+        &impulseActive);
     effects[4] = std::make_unique<Ceres2Effect>(*parameters.getRawParameterValue("chorusRate"),
         *parameters.getRawParameterValue("chorusDepth"), *parameters.getRawParameterValue("chorusMix"),
         *parameters.getRawParameterValue("chorusBypass"));
@@ -34,7 +35,7 @@ StompForgeAudioProcessor::StompForgeAudioProcessor()
         *parameters.getRawParameterValue("5150Master"), *parameters.getRawParameterValue("5150Presence"),
         *parameters.getRawParameterValue("5150Resonance"), *parameters.getRawParameterValue("5150Bias"),
         *parameters.getRawParameterValue("5150Sag"), *parameters.getRawParameterValue("5150Cab"),
-        *parameters.getRawParameterValue("5150Bypass"));
+        *parameters.getRawParameterValue("5150Bypass"), &impulseActive);
     auto cabPlayer = std::make_unique<ImpulseCabEffect>(*parameters.getRawParameterValue("irLevel"),
         *parameters.getRawParameterValue("irLowCut"), *parameters.getRawParameterValue("irHighCut"),
         *parameters.getRawParameterValue("irMix"), *parameters.getRawParameterValue("irBypass"));
@@ -139,6 +140,13 @@ void StompForgeAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBl
         parameters.getRawParameterValue("output")->load()));
 }
 
+void StompForgeAudioProcessor::publishLevel(std::atomic<float>& destination, float level) noexcept
+{
+    auto current = destination.load(std::memory_order_relaxed);
+    while (level > current && !destination.compare_exchange_weak(
+               current, level, std::memory_order_relaxed, std::memory_order_relaxed)) {}
+}
+
 void StompForgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -155,6 +163,10 @@ void StompForgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         parameters.getRawParameterValue("input")->load()));
     for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
         buffer.applyGain(sample, 1, inputGain.getNextValue());
+    float inputPeak = 0.0f;
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        inputPeak = juce::jmax(inputPeak, buffer.getMagnitude(channel, 0, buffer.getNumSamples()));
+    publishLevel(inputLevel, inputPeak);
 
     const auto order = getPedalOrder();
     for (auto id : order)
@@ -162,6 +174,10 @@ void StompForgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     outputGain.setTargetValue(juce::Decibels::decibelsToGain(parameters.getRawParameterValue("output")->load()));
     for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
         buffer.applyGain(sample, 1, outputGain.getNextValue());
+    float outputPeak = 0.0f;
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        outputPeak = juce::jmax(outputPeak, buffer.getMagnitude(channel, 0, buffer.getNumSamples()));
+    publishLevel(outputLevel, outputPeak);
 }
 
 void StompForgeAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
@@ -296,6 +312,14 @@ void StompForgeAudioProcessor::setPedalOrder(const std::array<PedalId, numSlots>
         const auto index = static_cast<size_t>(id);
         if (index >= seen.size() || seen[index]) return;
         seen[index] = true;
+    }
+    const auto hasImpulse = seen[static_cast<size_t>(PedalId::impulseCab)];
+    impulseActive.store(hasImpulse, std::memory_order_release);
+    if (hasImpulse) {
+        for (const auto* id : {"jcmCab", "5150Cab"})
+            if (auto* parameter = parameters.getParameter(id); parameter != nullptr
+                && parameter->getValue() >= 0.5f)
+                parameter->setValueNotifyingHost(0.0f);
     }
     packedOrder.store(packOrder(order), std::memory_order_release);
     if (saveToState) {

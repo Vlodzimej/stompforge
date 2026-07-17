@@ -95,7 +95,8 @@ public:
                  std::atomic<float>& middle, std::atomic<float>& treble,
                  std::atomic<float>& master, std::atomic<float>& presence,
                  std::atomic<float>& sag, std::atomic<float>& cabEnabled,
-                 std::atomic<float>& bypass);
+                 std::atomic<float>& bypass,
+                 std::atomic<bool>* cabSuppressed = nullptr);
     void prepare(const juce::dsp::ProcessSpec&) override;
     void reset() override;
     void process(juce::AudioBuffer<float>&) override;
@@ -108,6 +109,7 @@ private:
     std::atomic<float>& masterParam; std::atomic<float>& presenceParam;
     std::atomic<float>& sagParam; std::atomic<float>& cabEnabledParam;
     std::atomic<float>& bypassParam;
+    std::atomic<bool>* cabSuppressedParam = nullptr;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     std::array<Filter, 2> inputHighPass, brightHighPass, toneLow, toneMid,
                           toneHigh, transformerHighPass, transformerLowPass,
@@ -130,7 +132,8 @@ public:
                   std::atomic<float>& treble, std::atomic<float>& master,
                   std::atomic<float>& presence, std::atomic<float>& resonance,
                   std::atomic<float>& bias, std::atomic<float>& sag,
-                  std::atomic<float>& cabEnabled, std::atomic<float>& bypass);
+                  std::atomic<float>& cabEnabled, std::atomic<float>& bypass,
+                  std::atomic<bool>* cabSuppressed = nullptr);
     void prepare(const juce::dsp::ProcessSpec&) override;
     void reset() override;
     void process(juce::AudioBuffer<float>&) override;
@@ -144,6 +147,7 @@ private:
     std::atomic<float>& presenceParam; std::atomic<float>& resonanceParam;
     std::atomic<float>& biasParam; std::atomic<float>& sagParam;
     std::atomic<float>& cabEnabledParam; std::atomic<float>& bypassParam;
+    std::atomic<bool>* cabSuppressedParam = nullptr;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     std::array<Filter, 2> inputHighPass, interstageLowPass1, interstageLowPass2,
                           toneLow, toneMid, toneHigh, transformerHighPass,

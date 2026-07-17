@@ -16,10 +16,11 @@ public:
 private:
     class PedalCard;
     class GridCell;
+    class LevelFader;
     StompForgeAudioProcessor& processor;
     std::array<std::unique_ptr<PedalCard>, StompForgeAudioProcessor::numEffects> pedals;
     std::array<std::unique_ptr<GridCell>, StompForgeAudioProcessor::numSlots> gridCells;
-    juce::Slider inputKnob, outputKnob;
+    std::unique_ptr<LevelFader> inputFader, outputFader;
     juce::Label inputLabel, outputLabel;
     juce::TextButton gridButton;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
