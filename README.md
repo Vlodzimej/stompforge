@@ -2,95 +2,78 @@
 
 ![StompForge icon](Assets/stompforge-icon.png)
 
-Русский | [English](README.en.md)
+**Alpha 0.0.2** is an early test release of the modular guitar audio processor
+by Vlodzimej Garlic. Verified Windows x64 builds are available as VST3 and
+Standalone. The source tree also contains experimental iOS/iPadOS Standalone
+and AUv3 targets. Do not rely on this alpha as the only processor in a critical
+recording or live setup.
 
-**Alpha 0.0.2** — ранняя тестовая версия гитарного аудиопроцессора от
-Vlodzimej Garlic. Проверенная сборка доступна для Windows x64 в форматах VST3
-и Standalone. Исходный код также содержит экспериментальные iOS/iPadOS
-Standalone и AUv3 targets. Alpha предназначена для проверки звука,
-совместимости оборудования и пользовательского интерфейса;
-не используйте её как единственный процессор на концерте или при критичной
-записи.
+## Features
 
-## Возможности
+- Pedalboard matrix from 1x1 to 4x3 with empty cells and drag-and-drop.
+- Up to three main controls per pedal; additional parameters are under `MORE`.
+- Input and output faders with live level meters.
+- DAW state persistence for parameters, grid geometry and effect order.
+- Matching mono input/output and stereo input/output layouts.
+- WAV/AIFF cabinet impulse response loading.
+- Neural Amp Modeler `.nam` loading with host sample-rate conversion.
+- Protection against enabling an amp CABSIM and IMPULSE at the same time.
+- Touch-oriented landscape UI and buffer-size selection on iOS/iPadOS
+  Standalone.
+- Managed IR/NAM storage, shared by the iOS app and AUv3 through an App Group.
 
-- Матрица педалборда от 1x1 до 4x3 с пустыми ячейками и drag-and-drop.
-- До трёх основных регуляторов на карточке; остальные параметры находятся в
-  окне `MORE`.
-- Входной и выходной вертикальные фейдеры с индикаторами уровня.
-- Сохранение параметров, геометрии матрицы и порядка модулей в проекте DAW.
-- Mono и stereo с одинаковым числом входных и выходных каналов.
-- Загрузка cabinet IR в форматах WAV/AIFF.
-- Загрузка моделей Neural Amp Modeler `.nam` с автоматическим согласованием
-  частоты дискретизации хоста.
-- Защита от одновременного включения встроенного amp CABSIM и модуля IMPULSE.
-- Touch-oriented landscape UI и выбор buffer size для iOS/iPadOS Standalone.
-- Управляемое хранилище IR/NAM; на iOS оно разделяется между приложением и
-  AUv3 через App Group.
-
-## Модули
+## Modules
 
 - **STARGATE** — noise gate.
-- **DEIMOS-1** — circuit-inspired distortion с 4x oversampling.
-- **FREQUENCY** — трёхполосный EQ.
+- **DEIMOS-1** — circuit-inspired distortion with 4x oversampling.
+- **FREQUENCY** — three-band EQ.
 - **CERES-2** — BBD-inspired chorus.
-- **MARS-8** — британский ламповый amp с переключаемым 4x12 cabsim.
-- **VULCAN-5** — Clean/Crunch/Lead amp с 6L6-inspired оконечным каскадом.
-- **MODELER** — проигрыватель `.nam` на базе NeuralAmpModelerCore.
-- **IMPULSE** — cabinet IR player с Low Cut, High Cut, Level и Mix.
+- **MARS-8** — British-style tube amp with switchable 4x12 cabsim.
+- **VULCAN-5** — Clean/Crunch/Lead amp with a 6L6-inspired power stage.
+- **MODELER** — `.nam` player based on NeuralAmpModelerCore.
+- **IMPULSE** — cabinet IR player with Low Cut, High Cut, Level and Mix.
 - **VOID CHAMBER** — algorithmic reverb.
 - **PULSAR** — digital delay.
-- **LUNER** — проходной хроматический тюнер.
+- **LUNER** — pass-through chromatic tuner.
 
-## Сценарии использования
+MODELER does not ship with amplifier models. Users are responsible for their
+right to use and distribute selected `.nam` models and impulse responses.
 
-- гитарная запись и re-amping в DAW через VST3;
-- домашняя практика через Standalone и аудиоинтерфейс;
-- построение цепочек distortion, modulation, amp, IR, delay и reverb;
-- сравнение собственных amp-моделей с файлами `.nam`;
-- быстрый тюнинг инструмента внутри общей цепочки;
-- прототипирование пресетов и проверка разных порядков эффектов.
+## Windows installation
 
-MODELER не содержит моделей усилителей. Пользователь самостоятельно выбирает
-`.nam` и отвечает за право использовать и распространять конкретную модель.
-Аналогичное правило относится к загружаемым impulse response.
+The installer places:
 
-## Установка Windows
+- the VST3 bundle in the system Common Files/VST3 directory;
+- the Standalone application in Program Files/StompForge.
 
-Установщик размещает:
+Restart the DAW or rescan plug-ins after installation. In Standalone, select
+the audio interface, guitar input, output and a safe buffer size. Start at a
+low monitoring volume.
 
-- VST3 в системный каталог Common Files/VST3;
-- Standalone в Program Files/StompForge.
+## Alpha limitations
 
-После установки перезапустите DAW или выполните повторное сканирование VST3.
-В Standalone выберите аудиоинтерфейс, вход гитары, выход и безопасный размер
-буфера. Начинайте с низкой громкости.
+- The verified release platform is Windows 10/11 x64.
+- iOS/iPadOS targets have not yet been signed or tested on physical hardware.
+- MODELER is temporarily unavailable on iOS/iPadOS.
+- `.nam` models load synchronously and a large model may briefly block the UI.
+- Imported `.nam` and IR files are managed by StompForge but are not embedded
+  into the DAW project state.
+- Preset management and automated recovery of missing external assets are not
+  implemented yet.
+- Standalone expects the guitar on hardware input 1.
+- Release binaries are currently unsigned.
 
-## Известные ограничения alpha
+## Windows build
 
-- Проверенная release-платформа — Windows 10/11 x64.
-- iOS/iPadOS-конфигурация пока не прошла сборку, подпись и тестирование на
-  физическом устройстве.
-- MODELER временно недоступен на iOS/iPadOS.
-- Файлы `.nam` загружаются синхронно из UI; крупная модель может на короткое
-  время задержать интерфейс.
-- Выбранные `.nam` и IR импортируются в управляемое хранилище StompForge, но не
-  встраиваются непосредственно в состояние проекта DAW.
-- Пресеты и автоматизированная миграция отсутствующих внешних файлов пока не
-  реализованы.
-- Standalone ожидает гитару на аппаратном входе 1.
-
-## Сборка
-
-Требуются Git, CMake 3.22+ и Visual Studio 2022 с компонентом
-`Desktop development with C++`.
+Requirements: Git, CMake 3.22+ and Visual Studio 2022 with the
+`Desktop development with C++` workload.
 
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-ASIO для Standalone включается только при явной передаче SDK:
+To explicitly enable ASIO for a local Standalone build:
 
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
@@ -98,23 +81,22 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
 cmake --build build --config Release
 ```
 
-Без `ASIO_SDK_PATH` собирается Standalone с системными backend JUCE.
-
-Артефакты:
+Public 0.0.2-alpha release binaries are built without the ASIO SDK. The
+artifacts are generated under:
 
 - `build/StompForge_artefacts/Release/VST3/StompForge.vst3`
 - `build/StompForge_artefacts/Release/Standalone/StompForge.exe`
 
-Offline-проверка DSP:
+Run the offline DSP validation with:
 
 ```powershell
 build\StompForgeDspSmokeTest.exe
 ```
 
-### iOS/iPadOS
+## iOS/iPadOS build
 
-iOS-сборка выполняется на macOS генератором Xcode. Она создаёт Standalone
-приложение и встроенное AUv3-расширение. Интерфейс рассчитан на landscape:
+The iOS build requires macOS and the Xcode generator. It produces a Standalone
+container app with an embedded AUv3 extension:
 
 ```bash
 cmake -S . -B build-ios \
@@ -126,26 +108,16 @@ cmake --build build-ios --config Debug --target StompForge_Standalone \
   -- -sdk iphonesimulator
 ```
 
-Для устройства необходимо передать Apple Development Team и зарегистрировать
-bundle/App Group identifiers. Подробности и release gates находятся в
+A physical-device build also requires an Apple Development Team and registered
+bundle/App Group identifiers. See
 [Platforms/Apple/README.md](Platforms/Apple/README.md).
 
-## Лицензирование
+## Licensing
 
-StompForge распространяется как свободное программное обеспечение по
-[GNU Affero General Public License v3 или более поздней версии](LICENSE).
-Исходный код можно использовать, изучать, изменять и распространять при
-соблюдении условий AGPL, включая предоставление соответствующего исходного
-кода получателям бинарных сборок.
+StompForge is free software licensed under the
+[GNU Affero General Public License v3 or later](LICENSE).
 
-NeuralAmpModelerCore и используемые NAM-компоненты распространяются по
-permissive MIT; Eigen преимущественно использует MPL-2.0. Эти лицензии
-допускают включение в StompForge при сохранении требуемых уведомлений.
-
-JUCE 8 используется по открытому маршруту AGPLv3. Публичные release-бинарники
-0.0.2-alpha собираются без ASIO SDK; добавление ASIO требует отдельной проверки
-и соблюдения применимых условий Steinberg.
-
-Сторонние уведомления находятся в
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Это описание не является
-юридической консультацией.
+NeuralAmpModelerCore and the selected NAM components use permissive MIT terms;
+Eigen is primarily MPL-2.0. JUCE 8 is used through its AGPLv3 open-source
+route. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for required
+notices. This summary is not legal advice.

@@ -1,7 +1,5 @@
 # Apple mobile build
 
-[Русский](README.ru.md) | English
-
 StompForge uses the same JUCE processor and editor for the iOS/iPadOS
 standalone app and its embedded AUv3 extension. CMake enables these two targets
 when `CMAKE_SYSTEM_NAME=iOS`; Windows continues to build VST3 and Standalone.

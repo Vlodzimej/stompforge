@@ -1,42 +1,42 @@
 # StompForge 0.0.2-alpha
 
-[English](RELEASE_NOTES_0.0.2-alpha.en.md)
+The second StompForge alpha improves the iPhone/iPad project foundation and
+touch workflow while retaining the verified Windows x64 VST3 and Standalone
+formats.
 
-Второй alpha-выпуск StompForge улучшает подготовку проекта к iPhone/iPad и
-сенсорное управление, сохраняя проверенные Windows x64 VST3 и Standalone.
+## Highlights
 
-## Основное
+- Experimental iOS/iPadOS Standalone and AUv3 targets in the shared CMake
+  project.
+- Adaptive landscape pedalboard, touch effect menus and buffer-size selection.
+- App Group storage shared by the containing app and AUv3.
+- Automatic iOS Standalone state persistence.
+- Improved linked-channel NAM processing in Standalone.
+- New default chain: LUNER, STARGATE, DEIMOS-1, VULCAN-5, VOID CHAMBER and
+  PULSAR, with reverb and delay initially bypassed.
+- Removed the estimated `LATENCY` label.
 
-- Экспериментальные iOS/iPadOS Standalone и AUv3 targets в общем CMake-проекте.
-- Адаптивный landscape pedalboard, touch-меню эффектов и выбор buffer size.
-- App Group storage для общих ресурсов приложения и AUv3.
-- Автоматическое сохранение состояния iOS Standalone.
-- Улучшенная linked-channel обработка NAM в Standalone.
-- Новая цепочка по умолчанию: LUNER, STARGATE, DEIMOS-1, VULCAN-5,
-  VOID CHAMBER и PULSAR; reverb/delay начинают в bypass.
-- Удалена расчётная надпись `LATENCY`.
+## Compatibility
 
-## Совместимость
+- Release formats: Windows x64 VST3 and Standalone.
+- Existing APVTS parameter IDs remain stable.
+- MODELER remains available on Windows VST3/Standalone and is temporarily
+  disabled on iOS/iPadOS.
+- Selected IR/NAM files are imported into managed StompForge storage.
 
-- Форматы релиза: Windows x64 VST3 и Standalone.
-- Стабильные APVTS parameter IDs сохранены.
-- MODELER доступен в Windows VST3/Standalone, но временно отключён на
-  iOS/iPadOS.
-- Выбранные IR/NAM импортируются в управляемое хранилище StompForge.
+## Known limitations
 
-## Известные ограничения
+- This is a test alpha and is not intended for critical live use.
+- iOS/iPadOS targets have not been signed or tested on physical devices.
+- Loading a large `.nam` file may briefly block the UI.
+- Binaries are not digitally signed.
+- Public Windows binaries are built without the ASIO SDK.
 
-- Это тестовый alpha-выпуск, не предназначенный для критичных live-сценариев.
-- iOS/iPadOS targets не прошли подпись и тестирование на физическом устройстве.
-- Загрузка большой `.nam` может кратковременно задержать UI.
-- Бинарники не подписаны цифровой подписью.
-- Публичные Windows-бинарники собраны без ASIO SDK.
-
-## Файлы релиза
+## Release files
 
 - `StompForge-0.0.2-alpha-Windows-x64-Setup.exe`
 - `StompForge-0.0.2-alpha-Windows-x64-Portable.zip`
 - `SHA256SUMS.txt`
 
-StompForge и соответствующий исходный код распространяются по
+StompForge and its corresponding source are distributed under
 AGPL-3.0-or-later.

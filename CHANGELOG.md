@@ -1,85 +1,67 @@
 # Changelog
 
-Все заметные изменения StompForge фиксируются в этом файле. Формат основан на
-Keep a Changelog; версия продукта следует Semantic Versioning.
+All notable StompForge changes are recorded here. The format follows Keep a
+Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
-Пока нет изменений.
+No changes yet.
 
 ## [0.0.2-alpha] — 2026-07-17
 
-Второй alpha-выпуск развивает кроссплатформенную архитектуру и управление на
-сенсорных устройствах. Числовая версия бинарников и установщика — `0.0.2`.
+The second alpha expands the cross-platform architecture and touch-device
+workflow. The binary and installer version is `0.0.2`.
 
-### Добавлено
+### Added
 
-- CMake-конфигурация iOS/iPadOS для Standalone-приложения и встроенного
-  AUv3-расширения.
-- App Group storage для общих NAM-моделей и cabinet IR между приложением и
-  AUv3; на остальных платформах используется управляемый каталог StompForge.
-- Инструкция Apple mobile build с параметрами подписи и отдельными release
-  gates.
-- Touch-oriented меню эффектов, адаптивная pedalboard grid и landscape layout
-  для iPhone/iPad.
-- Выбор buffer size и сохранение Standalone-состояния на iOS/iPadOS.
-- Тест linked-channel обработки NAM в Standalone.
+- iOS/iPadOS CMake targets for a Standalone app with an embedded AUv3
+  extension.
+- App Group storage shared by the iOS app and AUv3 for NAM models and cabinet
+  IR files; other platforms use the managed StompForge application-data
+  directory.
+- Apple build instructions, signing settings and platform release gates.
+- Touch-oriented effect menus, adaptive pedalboard grid and landscape
+  iPhone/iPad layout.
+- Buffer-size selection and Standalone state persistence on iOS/iPadOS.
+- Linked-channel NAM processing coverage in the DSP smoke test.
 
-### Изменено
+### Changed
 
-- Цепочка по умолчанию начинается с LUNER, STARGATE, DEIMOS-1 и VULCAN-5;
-  VOID CHAMBER и PULSAR по умолчанию находятся в bypass.
-- В Standalone одна NAM-модель обрабатывает общий mono-вход и передаёт
-  результат в оба выходных канала.
-- Подписи параметров педалей приведены в соответствие с назначением controls.
-- MODELER явно недоступен на iOS/iPadOS до появления поддерживаемого mobile
+- The default chain starts with LUNER, STARGATE, DEIMOS-1 and VULCAN-5; VOID
+  CHAMBER and PULSAR start bypassed.
+- Standalone can process the common mono input through one NAM instance and
+  route its result to both output channels.
+- Pedal parameter labels now match their controls.
+- MODELER is explicitly unavailable on iOS/iPadOS pending a supported mobile
   backend.
-- Из интерфейса удалена расчётная надпись `LATENCY`; выбор buffer size
-  сохранён.
+- The estimated `LATENCY` label was removed while buffer-size selection
+  remains available.
 
-### Исправлено
+### Fixed
 
-- Исправлено чтение security-scoped файлов через URL и импорт в управляемое
-  хранилище.
-- Добавлены проверки конечности NAM output и безопасная работа с отсутствующим
-  channel model.
-- Исправлена Windows-компиляция platform guard `JUCE_IOS`.
+- Security-scoped URL loading and managed import of selected files.
+- Finite-output checks and safe handling of an absent NAM channel model.
+- Windows compilation of the `JUCE_IOS` platform guard.
 
 ## [0.0.1-alpha] — 2026-07-17
 
-Первая публичная alpha-версия. Числовая версия бинарников и установщика —
-`0.0.1`, канал выпуска — `alpha`.
+The first public alpha of the modular StompForge guitar processor.
 
-### Добавлено
+### Added
 
-- Настраиваемая матрица педалборда от 1x1 до 4x3 с двенадцатью физическими
-  слотами, пустыми ячейками, drag-and-drop и сохранением состояния.
-- Каталог Dynamic, Distortion, Modulation, Amp, Reverb, Delay, EQ, Cabs и Utils.
+- Configurable 1x1–4x3 pedalboard with twelve physical slots, empty cells,
+  drag-and-drop and persistent state.
+- Dynamic, Distortion, Modulation, Amp, Reverb, Delay, EQ, Cabs and Utils
+  categories.
 - STARGATE, DEIMOS-1, FREQUENCY, CERES-2, MARS-8, VULCAN-5, VOID CHAMBER,
-  PULSAR и LUNER.
-- IMPULSE с загрузкой WAV/AIFF, managed fallback cache, Low/High Cut, Level и
-  Mix.
-- MODELER на NeuralAmpModelerCore v0.5.4: загрузка `.nam`, ресемплинг к частоте
-  хоста, независимое stereo-состояние, Input, Output и Mix.
-- По три основных регулятора в карточке эффекта и окно `MORE` для остальных
-  параметров.
-- Вертикальные Input/Output фейдеры с отображением текущего уровня.
-- Windows x64 VST3, Standalone и Inno Setup installer.
-- Новая иконка приложения из исходного Adobe Illustrator artwork.
+  PULSAR and LUNER.
+- IMPULSE WAV/AIFF loader and MODELER based on NeuralAmpModelerCore v0.5.4.
+- Windows x64 VST3, Standalone and Inno Setup installer.
 
-### Изменено
+### Fixed
 
-- Сигнальная цепочка визуально проходит через пустые ячейки и выбирает
-  корректные стороны модулей при горизонтальном, вертикальном и диагональном
-  размещении.
-- Поток педалборда направлен от нижнего правого входа к верхнему левому выходу.
-- Активный IMPULSE подавляет CABSIM amp-модулей; попытка включить CABSIM
-  показывает предупреждение.
-
-### Исправлено
-
-- NAM architecture parsers принудительно сохраняются при линковке VST3 и
-  Standalone, включая WaveNet, LSTM и SlimmableContainer.
-- Устранено постепенное исчезновение сигнала в нелинейных модулях.
-- Standalone направляет аппаратный вход 1 в оба канала stereo-шины.
-- Исправлено восстановление отсутствующих параметров старых DAW-сессий.
+- Retained NAM architecture parser translation units during VST3 and
+  Standalone linking.
+- Prevented gradual signal loss in nonlinear modules.
+- Routed Standalone hardware input 1 to both channels.
+- Restored defaults for parameters absent from older DAW sessions.

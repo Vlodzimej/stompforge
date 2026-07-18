@@ -28,17 +28,31 @@ Windows-установщик собирается из `Packaging/StompForge.iss
 - `Source/PluginProcessor.*` — APVTS, аудиотракт, порядок и состояние.
 - `Source/PluginEditor.*` — интерфейс, параметры и drag-and-drop.
 - `Tests/DspSmokeTest.cpp` — длительный offline DSP-тест.
-- `Platforms/Apple/README.md` — сборка Standalone/AUv3 и Apple release gates.
+- `Platforms/Apple/README.md` — англоязычная инструкция по сборке
+  Standalone/AUv3 и Apple release gates.
 - `Assets/stompforge-icon.png` — исходная прозрачная иконка приложения.
 - `Assets/stompforge-icon.ico` — многоразмерная иконка установщика Windows.
 - `Assets/stompforge-icon-source.ai` — векторный мастер новой иконки.
-- `CHANGELOG.md` — журнал изменений релизов.
-- `README.md` — пользовательское описание.
+- `CHANGELOG.md` — англоязычный журнал изменений релизов.
+- `README.md` — англоязычное пользовательское описание.
+- `RELEASE_NOTES_<version>.md` — англоязычные заметки к выпускам.
 - `THIRD_PARTY_NOTICES.md` — обязательные уведомления сторонних компонентов.
-- `RELEASE_CHECKLIST.md` — release gates, включая выбор лицензии JUCE/ASIO.
+- `RELEASE_CHECKLIST.md` — англоязычные release gates, включая выбор лицензии
+  JUCE/ASIO.
 
 Внешние изображения скинов не используются. `build/` и `.tools/` не добавлять
 в Git.
+
+## Язык документации
+
+`AGENTS.md` ведётся на русском языке. Публичные описательные и релизные файлы
+(`README.md`, `Platforms/Apple/README.md`, `CHANGELOG.md`,
+`RELEASE_NOTES_<version>.md`, `RELEASE_CHECKLIST.md` и
+`THIRD_PARTY_NOTICES.md`) ведутся только на английском языке.
+
+Не создавать параллельные языковые версии и не добавлять к именам файлов
+суффиксы `.en` или `.ru`. Внутренние ссылки должны указывать на канонические
+имена файлов без языкового суффикса.
 
 ## Архитектура DSP
 
@@ -52,15 +66,16 @@ Windows-установщик собирается из `Packaging/StompForge.iss
 
 Цепочка по умолчанию:
 
-1. STARGATE.
-2. DEIMOS-1.
-3. CERES-2.
-4. MARS-8 с включённым cabsim 4x12.
+1. LUNER.
+2. STARGATE.
+3. DEIMOS-1.
+4. VULCAN-5 с включённым cabsim.
 5. VOID CHAMBER.
 6. PULSAR.
 
-FREQUENCY доступен в категории EQ вне базовой цепочки. Старый `DriveEffect` и
-параметры `drive`, `mix`, `driveBypass` сохранены для совместимости.
+VOID CHAMBER и PULSAR по умолчанию находятся в bypass. FREQUENCY доступен в
+категории EQ вне базовой цепочки. Старый `DriveEffect` и параметры `drive`,
+`mix`, `driveBypass` сохранены для совместимости.
 
 ## Модули
 
